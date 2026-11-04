@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """삽 진화 영상 렌더러 — 1920x1080 · 30fps · 8초 · H.264(MP4).
 
-    python3 render.py                        # 영상 렌더(기본 출력: ../minecraft_shovel_evolution.mp4)
+    python3 render.py                        # 무음 영상 렌더(../minecraft_shovel_evolution_silent.mp4)
+    python3 sfx.py                           # 효과음 합성 → ../minecraft_shovel_evolution.mp4
     python3 render.py --still 60 61 --out-dir /tmp/x   # 확인용 프레임만 PNG로
     python3 render.py --textures DIR         # 본인 PC의 정식 리소스팩 PNG로 바꿔 끼우기(선택)
 
@@ -443,7 +444,8 @@ def encode(out_path: Path, ctx: Context, crf: int = 14):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(HERE.parent / "minecraft_shovel_evolution.mp4"))
+    ap.add_argument("--out", default=str(HERE.parent / "minecraft_shovel_evolution_silent.mp4"),
+                    help="무음 영상. 효과음은 sfx.py가 입혀 minecraft_shovel_evolution.mp4로 만든다")
     ap.add_argument("--textures", default=None, help="<재질>_shovel.png 4장이 든 폴더(선택)")
     ap.add_argument("--still", type=int, nargs="*", help="이 프레임만 PNG로 저장")
     ap.add_argument("--out-dir", default=str(HERE.parent / "frames"))

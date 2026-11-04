@@ -4,7 +4,9 @@
 
 | 파일 | 내용 |
 |---|---|
-| `minecraft_shovel_evolution.mp4` | 최종 영상 — 1920×1080, 16:9, 30fps, 8.000초, H.264 High, yuv420p, 4.85 MB |
+| `minecraft_shovel_evolution.mp4` | 최종 영상(효과음 포함) — 1920×1080, 16:9, 30fps, 8.000초, H.264 High yuv420p + AAC 48kHz 스테레오, 5.05 MB |
+| `minecraft_shovel_evolution_silent.mp4` | 같은 영상의 무음본(배경음악을 따로 깔 때), 4.85 MB |
+| `audio/sfx.wav` | 효과음 원본(48kHz 16bit 스테레오, 통합 음량 약 −13.5 LUFS, 최대 −1 dBFS) |
 | `preview.png` | 네 삽 비교 이미지(1920×720) |
 | `thumbnail.png` | 다이아 삽 중심 썸네일(1920×1080) |
 | `frames/` | 검증용 대표 프레임 4장, 대표 4장 모음, 전환 12프레임 모음, `verify_report.json` |
@@ -23,6 +25,23 @@
 배경: 어두운 돌 블록 동굴 벽(석탄·철·다이아 광석 약간), 양옆 횃불이 미세하게 깜박이고 먼지 알갱이가 천천히 떠오릅니다.
 삽 재질에 맞춰 벽에 비치는 빛 색이 바뀝니다(나무 따뜻한 빛 → 다이아 청록 빛).
 
+## 효과음 (`source/sfx.py`)
+
+소리 파일을 쓰지 않고 전부 NumPy로 합성했습니다. 시각은 `render.py`의 전환 시각과 반짝이 목록을 그대로 읽으므로 화면과 어긋나지 않습니다.
+마지막에 동굴 잔향(약 2.9초)을 입힙니다.
+
+| 시간 | 소리 |
+|---|---|
+| 전체 | 낮게 깔린 동굴 저음, 물방울 '똑' 3번(1.15·3.45·5.25초), 좌우 횃불 타닥 소리 |
+| 0.0–0.4초 | 등장 '휘익' + 칩튠 '뿅' |
+| 각 전환 직전 0.32초 | 반음씩 오르는 칩튠 음 + 바람 상승음(기 모으기) |
+| 2.0초 | 돌: 둔탁한 '쿵' + 나무 부서지는 소리 + 자갈 후두둑 |
+| 4.0초 | 철: '쿵' + 금속 '챙'(비조화 배음, 1.5초 울림) + 빛 띠 '쉭' + 반짝 소리 |
+| 6.0초 | 다이아: 가장 큰 '붐' + 수정 화음(E장조) + 칩튠 팡파르 + 반짝 소리 10여 개 + '쉭' 2번 |
+| 7.75–8.0초 | 페이드아웃(끊김 방지) |
+
+음량 크기 순서는 다이아 충격음 > 돌 > 철 > 기 모으기 > 바탕입니다. 소리 크기는 `sfx.py`의 각 함수에서 `m.put(..., gain)` 값을 바꾸면 됩니다.
+
 ## 품질 처리
 
 - **텍스처**: 16×16 픽셀아트를 직접 찍었습니다(`source/pixelart.py`). 네 삽은 하나의 모양 틀에서 색표만 바꿔 만들어서
@@ -36,11 +55,12 @@
 
 ```
 길이 8.000s · 1920x1080 · 30/1 fps · 240 프레임 · h264 High · yuv420p
+소리 aac 48000Hz 2ch 8.000s · 통합 음량 -13.5 LUFS
 f030 (1.0s)   기대 wooden  → 판정 wooden   텍셀 53개 평균오차 2.3  최대 3.0
 f090 (3.0s)   기대 stone   → 판정 stone    텍셀 53개 평균오차 1.32 최대 3.0
 f150 (5.0s)   기대 iron    → 판정 iron     텍셀 53개 평균오차 1.26 최대 3.0
 f239 (7.967s) 기대 diamond → 판정 diamond  텍셀 53개 평균오차 2.0  최대 3.0
-13개 검사 모두 통과
+15개 검사 모두 통과
 ```
 
 대표 프레임은 MP4를 다시 디코딩해서 뽑습니다. 삽의 텍셀 53개 각각의 중심 색을 원본 텍스처 색과 비교한 결과,
@@ -51,9 +71,10 @@ f239 (7.967s) 기대 diamond → 판정 diamond  텍셀 53개 평균오차 2.0  
 ```bash
 cd source
 python3 pixelart.py      # textures/ 에 16x16 원본과 x16 확대본 저장
-python3 render.py        # ../minecraft_shovel_evolution.mp4 (약 3분, CPU만)
+python3 render.py        # ../minecraft_shovel_evolution_silent.mp4 무음 영상(약 3분, CPU만)
+python3 sfx.py           # ../audio/sfx.wav 합성 → 무음본에 입혀 ../minecraft_shovel_evolution.mp4 (2초)
 python3 stills.py        # ../preview.png, ../thumbnail.png
-python3 verify.py        # ffprobe 규격 + 대표 프레임 추출 + 텍셀 색 대조
+python3 verify.py        # ffprobe 규격(영상·소리) + 대표 프레임 추출 + 텍셀 색 대조
 python3 render.py --still 60 180 --out-dir /tmp/x   # 특정 프레임만 PNG로
 ```
 

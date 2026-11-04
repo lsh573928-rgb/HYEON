@@ -40,6 +40,24 @@ def probe(mp4: Path) -> dict:
     return {**j["streams"][0], **{f"format_{k}": v for k, v in j["format"].items()}}
 
 
+def probe_audio(mp4: Path) -> dict | None:
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+         "stream=codec_name,sample_rate,channels,duration,bit_rate", "-of", "json", str(mp4)],
+        check=True, capture_output=True, text=True).stdout
+    st = json.loads(out).get("streams", [])
+    if not st:
+        return None
+    a = st[0]
+    lufs = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(mp4), "-map", "0:a:0",
+                           "-af", "ebur128", "-f", "null", "-"], capture_output=True, text=True).stderr
+    for line in lufs.splitlines()[::-1]:
+        if line.strip().startswith("I:"):
+            a["integrated_lufs"] = float(line.split()[1])
+            break
+    return a
+
+
 def extract(mp4: Path, frames, out_paths):
     expr = "+".join(f"eq(n\\,{n})" for n in frames)
     tmp = out_paths[0].parent / "_tmp_%03d.png"
@@ -95,6 +113,11 @@ def main():
         "8.0 s": abs(dur - 8.0) < 0.05,
         "yuv420p": info["pix_fmt"] == "yuv420p",
     }
+    audio = probe_audio(mp4)
+    if audio is not None:
+        checks["audio aac 48kHz stereo"] = (audio["codec_name"] == "aac" and audio["sample_rate"] == "48000"
+                                            and audio["channels"] == 2)
+        checks["audio 8.0 s"] = abs(float(audio["duration"]) - 8.0) < 0.05
 
     texs = Textures()
     rep_paths = [fdir / f"rep_{i + 1}_{name}_f{n:03d}.png" for i, (n, name) in enumerate(REP)]
@@ -117,12 +140,17 @@ def main():
         p.unlink()
     sheet(rep_paths, 2, 960, 540, fdir / "representative_sheet.png")
 
-    report = dict(file=str(mp4.name), probe=info, checks=checks, texel_check=texel,
+    report = dict(file=str(mp4.name), probe=info, audio=audio, checks=checks, texel_check=texel,
                   all_ok=all(checks.values()))
     (fdir / "verify_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
     print(f"파일: {mp4}  ({int(info['format_size']) / 1e6:.2f} MB)")
     print(f"길이 {dur:.3f}s · {info['width']}x{info['height']} · {info['r_frame_rate']} fps · "
           f"{info['nb_read_frames']} 프레임 · {info['codec_name']} {info['profile']} · {info['pix_fmt']}")
+    if audio is not None:
+        print(f"소리 {audio['codec_name']} {audio['sample_rate']}Hz {audio['channels']}ch "
+              f"{float(audio['duration']):.3f}s · 통합 음량 {audio.get('integrated_lufs')} LUFS")
+    else:
+        print("소리 없음(무음 영상)")
     for r in texel:
         print(f"  f{r['frame']:03d} ({r['time_s']}s) 기대 {r['expected']:<7} → 판정 {r['best_match']:<7}"
               f" 텍셀 {r['texels']}개 평균오차 {r['mean_err']} 최대 {r['max_err']}"
