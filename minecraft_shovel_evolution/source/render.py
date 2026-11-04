@@ -30,7 +30,7 @@ sys.path.insert(0, str(HERE))
 
 import pixelart as pa  # noqa: E402
 from scene import (Coarse, blend_rect, clamp01, draw_sparkle, draw_sprite,  # noqa: E402
-                   ease_out_back, falloff, quant, rays, smoothstep, tex_to_screen)
+                   draw_text, ease_out_back, falloff, quant, rays, smoothstep, tex_to_screen)
 
 W, H = 1920, 1080
 FPS = 30
@@ -42,6 +42,22 @@ BG_TEXEL = 8                                # 벽 1텍셀 = 8px (블록 16텍셀
 MARGIN = 32                                 # 화면 흔들림 여유
 TRANS = (2.0, 4.0, 6.0)
 ORDER = pa.ORDER
+TORCH_XY = ((200, 330), (1704, 330))        # 횃불 불꽃 맨 윗칸의 화면 좌표
+LABELS_ON = False                            # 세로판: 위 제목 + 아래 단계 이름
+
+
+def configure_vertical():
+    """세로판(1080x1920, 9:16) 배치로 바꾼다. Context를 만들기 전에 불러야 한다.
+
+    삽은 화면 폭의 72%(텍셀 60px), 중심은 조금 위(y=920). 위아래 빈 곳에 제목·단계 이름을 넣고,
+    아래쪽 20%는 앱 화면의 자막·버튼에 가려질 수 있어 비워 둔다.
+    """
+    global W, H, CX, CY, TEXEL, TORCH_XY, LABELS_ON
+    W, H = 1080, 1920
+    CX, CY = W // 2, 920
+    TEXEL = 60
+    TORCH_XY = ((96, 1460), (968, 1460))
+    LABELS_ON = True
 
 WHITE = np.array([1.0, 1.0, 1.0], np.float32)
 CYAN = np.array([0.30, 1.0, 0.88], np.float32)
@@ -169,8 +185,6 @@ def light_levels(t: float, mat: str):
 
 # ======================================================================== 배경(동굴)
 class Cave:
-    TORCHES = ((29, 45), (217, 45))          # 벽 격자(열, 행) — 불꽃 맨 윗칸
-
     def __init__(self):
         self.gw = (W + 2 * MARGIN) // BG_TEXEL
         self.gh = (H + 2 * MARGIN) // BG_TEXEL
@@ -183,8 +197,9 @@ class Cave:
         rn = np.hypot((wx - CX) / (W * 0.5), (wy - CY) / (H * 0.5)) / math.sqrt(2)
         # 경계가 생기지 않는 매끈한 비네팅(가운데 1.0 → 모서리 약 0.25)
         self.vign = (0.18 + 0.82 * np.exp(-(rn / 0.75) ** 3)).astype(np.float32)[..., None]
+        self.torches = [((x + MARGIN) // BG_TEXEL, (y + MARGIN) // BG_TEXEL) for x, y in TORCH_XY]
         self.torch_fall = []
-        for c, r in self.TORCHES:
+        for c, r in self.torches:
             tx, ty = (c + 1) * BG_TEXEL - MARGIN, (r + 2) * BG_TEXEL - MARGIN
             self.torch_fall.append(falloff(np.hypot(wx - tx, wy - ty), 340, 1.8)[..., None]
                                    .astype(np.float32))
@@ -202,7 +217,7 @@ class Cave:
         halo = (LIGHT[mat] * (halo_I * falloff(d, 470, 2.2))[..., None]
                 + WHITE * (0.35 * white_I * falloff(d, 420, 2.2))[..., None])
         lit = lit + halo
-        for k, (c, r) in enumerate(self.TORCHES):
+        for k, (c, r) in enumerate(self.torches):
             variant = int(t * 9 + 1.7 * k + (0.6 if math.sin(t * 5 + k) > 0.7 else 0))
             for rr, cc, col, emit in pa.torch_cells(variant):
                 lit[r + rr, c + cc] = col if emit else col * 0.85
@@ -410,6 +425,8 @@ def render_frame(n: int, ctx: Context) -> np.ndarray:
                 alpha=st["alpha"])
     draw_particles(canvas, ctx.parts, t, dx, dy)
     draw_sparkles(canvas, ctx.sparkles, st)
+    if LABELS_ON:
+        draw_labels(canvas, st)
 
     for T, col, peak, tau in FLASH:
         dt = t - T
@@ -419,6 +436,21 @@ def render_frame(n: int, ctx: Context) -> np.ndarray:
             canvas += col * a
     canvas *= smoothstep(0.0, 0.35, t) if t < 0.35 else 1.0
     return (np.clip(canvas, 0, 1) * 255 + 0.5).astype(np.uint8)
+
+
+LABEL_COLOR = {"wooden": (0.86, 0.67, 0.34), "stone": (0.80, 0.80, 0.80),
+               "iron": (0.96, 0.96, 0.96), "diamond": (0.30, 0.94, 0.86)}
+
+
+def draw_labels(canvas, st):
+    """세로판 글자: 위 SHOVEL / EVOLUTION, 아래 지금 단계 이름(바뀔 때 잠깐 커짐)."""
+    draw_text(canvas, "SHOVEL", CX, 250, 14, (1.0, 1.0, 1.0), align="center")
+    draw_text(canvas, "EVOLUTION", CX, 382, 10, tuple(CYAN), align="center")
+    unit = 10
+    if st["idx"] > 0 and st["t"] - TRANS[st["idx"] - 1] < 0.18:
+        unit = 12
+    draw_text(canvas, pa.LABELS[st["mat"]], CX, 1420 - (unit - 10) * 7 // 2, unit,
+              LABEL_COLOR[st["mat"]], align="center")
 
 
 # ======================================================================== 인코딩
@@ -444,20 +476,26 @@ def encode(out_path: Path, ctx: Context, crf: int = 14):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(HERE.parent / "minecraft_shovel_evolution_silent.mp4"),
-                    help="무음 영상. 효과음은 sfx.py가 입혀 minecraft_shovel_evolution.mp4로 만든다")
+    ap.add_argument("--out", default=None,
+                    help="무음 영상(기본 ../minecraft_shovel_evolution[_vertical]_silent.mp4). "
+                         "효과음은 sfx.py가 입힌다")
+    ap.add_argument("--vertical", action="store_true", help="세로판 1080x1920(9:16)")
     ap.add_argument("--textures", default=None, help="<재질>_shovel.png 4장이 든 폴더(선택)")
     ap.add_argument("--still", type=int, nargs="*", help="이 프레임만 PNG로 저장")
     ap.add_argument("--out-dir", default=str(HERE.parent / "frames"))
     ap.add_argument("--crf", type=int, default=14)
     a = ap.parse_args()
+    if a.vertical:
+        configure_vertical()
+    tag = "_vertical" if a.vertical else ""
+    a.out = a.out or str(HERE.parent / f"minecraft_shovel_evolution{tag}_silent.mp4")
     ctx = Context(a.textures)
     if not ctx.tex.same_silhouette:
         print("주의: 바꿔 낀 텍스처 4장의 실루엣이 서로 다릅니다(기준점은 합친 모양의 중심).")
     if a.still is not None:
         Path(a.out_dir).mkdir(parents=True, exist_ok=True)
         for n in a.still:
-            p = Path(a.out_dir) / f"still_{n:03d}.png"
+            p = Path(a.out_dir) / f"still{tag}_{n:03d}.png"
             Image.fromarray(render_frame(n, ctx)).save(p)
             print(p)
         return

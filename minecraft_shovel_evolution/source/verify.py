@@ -22,7 +22,8 @@ from PIL import Image
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from render import FPS, H, NFRAMES, ORDER, W, Textures, frame_state  # noqa: E402
+import render as R  # noqa: E402
+from render import FPS, NFRAMES, ORDER, Textures, frame_state  # noqa: E402
 from scene import tex_to_screen  # noqa: E402
 
 REP = ((30, "wooden"), (90, "stone"), (150, "iron"), (NFRAMES - 1, "diamond"))
@@ -98,16 +99,25 @@ def sheet(paths, cols, w, h, out):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("mp4", nargs="?")
+    ap.add_argument("--vertical", action="store_true", help="세로판(1080x1920) 검증")
+    args = ap.parse_args()
+    if args.vertical:
+        R.configure_vertical()
     root = HERE.parent
-    mp4 = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "minecraft_shovel_evolution.mp4"
-    fdir = root / "frames"
-    fdir.mkdir(exist_ok=True)
+    tag = "_vertical" if args.vertical else ""
+    mp4 = Path(args.mp4) if args.mp4 else root / f"minecraft_shovel_evolution{tag}.mp4"
+    fdir = root / "frames" / ("vertical" if args.vertical else "")
+    fdir.mkdir(parents=True, exist_ok=True)
     info = probe(mp4)
     dur = float(info["format_duration"])
     checks = {
         "codec h264": info["codec_name"] == "h264",
-        "1920x1080": (info["width"], info["height"]) == (W, H),
-        "16:9": info.get("display_aspect_ratio") in ("16:9", None),
+        f"{R.W}x{R.H}": (info["width"], info["height"]) == (R.W, R.H),
+        ("9:16" if args.vertical else "16:9"):
+            info.get("display_aspect_ratio") in ("9:16" if args.vertical else "16:9", None),
         "30fps": info["r_frame_rate"] == "30/1" and info["avg_frame_rate"] == "30/1",
         "240 frames": int(info["nb_read_frames"]) == NFRAMES,
         "8.0 s": abs(dur - 8.0) < 0.05,
@@ -135,10 +145,16 @@ def main():
 
     tr_paths = [fdir / f"_tr_{n:03d}.png" for n in TRANSITION_FRAMES]
     extract(mp4, TRANSITION_FRAMES, tr_paths)
-    sheet(tr_paths, 4, 480, 270, fdir / "transitions_sheet.png")
+    if args.vertical:
+        sheet(tr_paths, 6, 270, 480, fdir / "transitions_sheet.png")
+    else:
+        sheet(tr_paths, 4, 480, 270, fdir / "transitions_sheet.png")
     for p in tr_paths:
         p.unlink()
-    sheet(rep_paths, 2, 960, 540, fdir / "representative_sheet.png")
+    if args.vertical:
+        sheet(rep_paths, 4, 405, 720, fdir / "representative_sheet.png")
+    else:
+        sheet(rep_paths, 2, 960, 540, fdir / "representative_sheet.png")
 
     report = dict(file=str(mp4.name), probe=info, audio=audio, checks=checks, texel_check=texel,
                   all_ok=all(checks.values()))

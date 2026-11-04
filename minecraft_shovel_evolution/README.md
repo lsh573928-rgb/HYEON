@@ -6,6 +6,9 @@
 |---|---|
 | `minecraft_shovel_evolution.mp4` | 최종 영상(효과음 포함) — 1920×1080, 16:9, 30fps, 8.000초, H.264 High yuv420p + AAC 48kHz 스테레오, 5.05 MB |
 | `minecraft_shovel_evolution_silent.mp4` | 같은 영상의 무음본(배경음악을 따로 깔 때), 4.85 MB |
+| `minecraft_shovel_evolution_vertical.mp4` | 세로판 1080×1920(9:16, Threads·릴스·쇼츠용), 효과음 포함 — 위 제목·아래 단계 이름 표시, 삽은 폭의 72% |
+| `minecraft_shovel_evolution_vertical_silent.mp4` | 세로판 무음본 |
+| `threads_post.md` | Threads 글 최종본(본문·이어 쓰는 글·짧은 버전) |
 | `audio/sfx.wav` | 효과음 원본(48kHz 16bit 스테레오, 통합 음량 약 −13.5 LUFS, 최대 −1 dBFS) |
 | `preview.png` | 네 삽 비교 이미지(1920×720) |
 | `thumbnail.png` | 다이아 삽 중심 썸네일(1920×1080) |
@@ -75,6 +78,9 @@ python3 render.py        # ../minecraft_shovel_evolution_silent.mp4 무음 영�
 python3 sfx.py           # ../audio/sfx.wav 합성 → 무음본에 입혀 ../minecraft_shovel_evolution.mp4 (2초)
 python3 stills.py        # ../preview.png, ../thumbnail.png
 python3 verify.py        # ffprobe 규격(영상·소리) + 대표 프레임 추출 + 텍셀 색 대조
+
+# 세로판(1080x1920): 같은 타임라인·효과음, 배치만 다름(frames/vertical/에 검증 결과)
+python3 render.py --vertical && python3 sfx.py --vertical && python3 verify.py --vertical
 python3 render.py --still 60 180 --out-dir /tmp/x   # 특정 프레임만 PNG로
 ```
 

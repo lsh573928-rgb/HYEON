@@ -285,11 +285,17 @@ def mux(video: Path, audio: Path, out: Path):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--vertical", action="store_true",
+                    help="세로판 무음 영상에 같은 효과음을 입힌다(시점이 같으므로 소리는 공통)")
+    a = ap.parse_args()
     root = HERE.parent
-    silent = root / "minecraft_shovel_evolution_silent.mp4"
-    final = root / "minecraft_shovel_evolution.mp4"
-    if not silent.exists():          # render.py 결과(무음)를 무음본 이름으로 보관
-        final.replace(silent)
+    tag = "_vertical" if a.vertical else ""
+    silent = root / f"minecraft_shovel_evolution{tag}_silent.mp4"
+    final = root / f"minecraft_shovel_evolution{tag}.mp4"
+    if not silent.exists():
+        raise SystemExit(f"무음 영상이 없습니다: {silent} — 먼저 render.py{' --vertical' if tag else ''}")
     sparkles = build_sparkles(Textures())
     m = Mix()
     ambience(m)
