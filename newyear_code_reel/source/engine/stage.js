@@ -19,18 +19,21 @@
   const DROP = 0.25;                                     // 연도판·삽질러가 떨어져 내려앉는 시간
   const COUNT_Y = 760;
   const WORKER_SCALE = 1.32;
-  const MONTH_NOTES = ['계획', '시작', '어라?', '다시', '또 다시', '수정', '재수정', '최종', '진짜최종', '찐최종', '마무리', '완성'];
+  const MONTH_NOTES = ['계획', '시작', '어라?', '다시', '또다시', '수정', '재수정', '최종', '진짜최종', '찐최종', '마무리', '완성'];
   const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   // 달마다 날 수만큼 두껍다(2월이 가장 얇다). BAND_TOP[k] = k번째 달이 끝나는 높이(px)
   const BAND_TOP = (function () { let acc = 0; return MONTH_DAYS.map(d => (acc += d) / YEAR_DAYS * FULL_H); })();
   const bandBottom = (k) => (k ? BAND_TOP[k - 1] : 0);
   const CUM_DAYS = (function () { let a = 0; return MONTH_DAYS.map(d => (a += d)); })();
-  // 삽질 박자: 1월·2월은 8분음표, 3월부터는 16분음표마다 한 달씩 닫힌다(삽질 시작 기준 시각, 12월이 1.75초)
-  const DIG_GRID = [0.25, 0.5].concat(Array.from({ length: 10 }, (_, k) => 0.625 + 0.125 * k));
+  // 삽질 박자: 1~10월은 8분음표(0.25초)마다, 11·12월은 16분음표로 몰아서 닫힌다(삽질 시작 기준 시각, 12월이 2.75초)
+  const DIG_GRID = Array.from({ length: 10 }, (_, k) => 0.25 * (k + 1)).concat([2.625, 2.75]);
   const SOIL = ['#5e4740', '#6d5348'];
   const GOLD = ['#f3b63a', '#ffd15e'];
 
   let REWIND = false;                                    // 되감는 중인지(draw가 켠다)
+  // 글자 세상 스위치: 주소에 ?typed=1(켬)/?typed=0(끔)이 있으면 그대로, 없으면 TYPED_DEFAULT
+  const TYPED_DEFAULT = true;
+  const TYPED = /[?&]typed=1/.test(location.search) ? true : (/[?&]typed=0/.test(location.search) ? false : (window.TYPED_WORLD != null ? !!window.TYPED_WORLD : TYPED_DEFAULT));
   function pyErr(type, msg) { const e = new Error(msg); e.pyType = type; return e; }
   function needNumber(v, name, lo, hi, msg) {
     if (typeof v !== 'number' || !isFinite(v)) throw pyErr('TypeError', `${name}에는 숫자가 필요합니다`);
@@ -184,12 +187,12 @@
       if (i < smalls) {
         burstT = t0 + 0.25 + i * step;
         const high = i % 4 === 2;                             // 몇 발은 제목 위로 높이
-        x = CX + side * (158 + h2 * 74); y = high ? 150 + h3 * 100 : 700 + h3 * 190;
-        R = 74 + h4 * 34; type = types[i % types.length]; nP = 64 + Math.floor(h2 * 26); life = 1.0;
+        x = CX + side * (150 + h2 * 80); y = high ? 250 + h3 * 80 : 700 + h3 * 190;
+        R = 90 + h4 * 38; type = types[i % types.length]; nP = 64 + Math.floor(h2 * 26); life = 1.0;
       } else if (i < smalls + willows) {
         const k = i - smalls;
         burstT = t0 + 0.5 + k * 0.25;
-        x = [128, 414, 452, 270][k]; y = [238, 206, 770, 150][k]; R = [150, 150, 118, 170][k];
+        x = [128, 414, 452, 270][k]; y = [330, 300, 770, 292][k]; R = [150, 150, 118, 170][k];
         type = 'willow'; color = '#ffd76a'; color2 = '#fff3d1'; nP = 120; life = 3.6;
       } else {
         burstT = t0 + 1.5; x = 96; y = 806; R = 120; type = 'shape'; shape = 'shovel'; color = '#ffd76a'; color2 = '#ffffff'; nP = 0;
@@ -343,23 +346,6 @@
       if (fl > 0.01) { g.fillStyle = `rgba(255,250,225,${0.7 * fl})`; g.fill(); }
       g.strokeStyle = gk > 0.5 ? 'rgba(120,70,0,0.55)' : 'rgba(22,12,16,0.7)'; g.lineWidth = 2.5;
       g.beginPath(); g.moveTo(CX - hb, yb); g.lineTo(CX + hb, yb); g.stroke();
-      // 달 이름표
-      const born = st.dig.bandT[k];
-      if (born != null && t >= born) {
-        // 붙는 순간 크게 '톡' 하고 나타났다가 제자리 크기로 줄어든다(전화 화면에서도 읽히게)
-        const pop = 1 + 0.9 * (1 - U.easeOutCubic(U.prog(t - born, 0, 0.34)));
-        const cy = (yb + (GROUND - BAND_TOP[k])) / 2 + 1, month = (k + 1) + '월', note = MONTH_NOTES[k];
-        g.save(); g.translate(CX, cy); g.scale(pop, pop); g.globalAlpha = U.prog(t - born, 0, 0.06);
-        g.textBaseline = 'middle';
-        g.font = '800 28px "Pretendard", sans-serif'; const wm = g.measureText(month).width;
-        g.font = '700 21px "Pretendard", sans-serif'; const wn = g.measureText(note).width;
-        const total = wm + 10 + wn; let x = -total / 2;
-        g.font = '800 28px "Pretendard", sans-serif'; g.textAlign = 'left';
-        g.fillStyle = U.mix('#f1dfc4', '#4a2a00', gk); g.fillText(month, x, 0); x += wm + 10;
-        g.font = '700 21px "Pretendard", sans-serif';
-        g.fillStyle = U.mix('#bfa58a', '#7a4d06', gk); g.fillText(note, x, 1);
-        g.restore(); g.globalAlpha = 1;
-      }
     }
     // 윤곽
     const yTop = GROUND - h, hT = halfAt(yTop);
@@ -381,6 +367,7 @@
       g.globalCompositeOperation = 'lighter';
       for (let i = 0; i < 26; i++) {
         const v = U.hash(i, 91), yy = GROUND - 8 - v * (h - 16), hh = halfAt(yy) - 10, xx = CX + (U.hash(i, 92) * 2 - 1) * hh;
+        if (Math.abs(xx - LABEL_X) < 88) continue;            // 이름표 글자 위에는 뿌리지 않는다
         const a = Math.pow(Math.max(0, Math.sin(t * (1.6 + 2.4 * U.hash(i, 93)) + U.hash(i, 94) * TAU)), 3) * gAll;
         U.dot(g, xx, yy, 22, '#ffffff', 0.9 * a, 0.25);
         if (a > 0.3) { g.globalAlpha = a * 0.8; g.strokeStyle = '#fffbe6'; g.lineWidth = 1.4; const l = 12 * a; g.beginPath(); g.moveTo(xx - l, yy); g.lineTo(xx + l, yy); g.moveTo(xx, yy - l); g.lineTo(xx, yy + l); g.stroke(); }
@@ -388,6 +375,166 @@
     }
     g.restore(); g.globalAlpha = 1;
   }
+  // 달 이름표(두 세상 공통). plate: 글자 흙더미 위에서는 어두운 바탕을 깔아 읽히게 한다(0..1)
+  const LABEL_X = CX - 34;                               // 이름표 가운데(삽질러와 삽이 오른쪽에 서므로 왼쪽으로 비켜 둔다)
+  function drawMoundLabels(g, t, st, plate) {
+    if (!st.dig) return;
+    const h = fillH(st, t); if (h <= 0.5) return;
+    for (let k = 0; k < st.dig.labeled; k++) {
+      const born = st.dig.bandT[k]; if (t < born) continue;
+      const gk = bandGild(st, t, k);
+      // 붙는 순간 크게 '톡' 하고 나타났다가 제자리 크기로 줄어든다(전화 화면에서도 읽히게)
+      const pop = 1 + 0.8 * (1 - U.easeOutCubic(U.prog(t - born, 0, 0.24)));
+      const cy = GROUND - (bandBottom(k) + BAND_TOP[k]) / 2 + 1, month = (k + 1) + '월', note = MONTH_NOTES[k];
+      g.save(); g.translate(LABEL_X, cy); g.scale(pop, pop); g.globalAlpha = U.prog(t - born, 0, 0.05);
+      g.textBaseline = 'middle';
+      const fMonth = '700 22px "Pretendard", sans-serif', fNote = '800 27px "Pretendard", sans-serif';   // 달은 작게, 그 달의 한마디는 크게
+      g.font = fMonth; const wm = g.measureText(month).width;
+      g.font = fNote; const wn = g.measureText(note).width;
+      const total = wm + 9 + wn; let x = -total / 2;
+      if (plate > 0.01) {
+        const a0 = g.globalAlpha; g.globalAlpha = a0 * plate;
+        U.roundRect(g, -total / 2 - 11, -15, total + 22, 30, 9); g.fillStyle = U.mix('#1c1520', '#2a1f06', gk); g.fill();
+        g.globalAlpha = a0;
+      }
+      g.textAlign = 'left';
+      g.font = fMonth; g.fillStyle = U.mix(U.mix('#c9b196', '#7a4d06', gk), U.mix('#bfa98f', '#ffd15e', gk), plate); g.fillText(month, x, 1); x += wm + 9;
+      g.font = fNote; g.fillStyle = U.mix(U.mix('#fff1d6', '#3d2200', gk), U.mix('#fff4e0', '#ffe9a8', gk), plate); g.fillText(note, x, 0);
+      g.restore(); g.globalAlpha = 1;
+    }
+  }
+
+  /* ───────────── 글자 세상 ─────────────
+     새해가 되기 전의 무대는 사물을 제 이름 글자로 그린다: 별은 '별', 눈은 '눈', 산은 '산', 집은 '집', 흙더미는 '삽'과 '질'.
+     2027이 잠기는 순간 연도판에서 퍼지는 고리를 따라 글자가 진짜 그림으로 바뀐다(draw의 reveal). */
+  const hill1 = (x) => GROUND - 96 - 58 * Math.sin(x / W * Math.PI * 1.1 + 0.4) - 22 * Math.sin(x / 47 + 1.3);
+  const hill2 = (x) => GROUND - 44 - 34 * Math.sin(x / W * Math.PI * 1.7 + 2.2) - 10 * Math.sin(x / 31);
+  function skyWords(g, cold) {
+    const gr = g.createLinearGradient(0, 0, 0, H);
+    gr.addColorStop(0, '#04050e'); gr.addColorStop(0.5, '#070b20'); gr.addColorStop(0.76, '#0c1232'); gr.addColorStop(1, '#090d24');
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    if (cold > 0) { g.fillStyle = `rgba(2,3,10,${0.3 * cold})`; g.fillRect(0, 0, W, H); }
+  }
+  function drawStarsWords(g, t) {
+    for (const s of BG_STARS) {
+      const tw = 0.55 + 0.45 * Math.sin(t * s.sp + s.ph);
+      const px = s.big ? 21 : (s.s > 1.3 ? 15 : 11);
+      Fx.stamp(g, Fx.glyph('별', px, s.big ? '#fff6cf' : '#c9d8ff', 800), s.x, s.y, tw * (0.45 + 0.5 * Math.min(1, s.s / 2)));
+    }
+  }
+  function drawFarWords(g, t) {
+    const layer = U.layer('words-hills', W, H, (c) => {
+      c.font = '800 17px "Pretendard", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      const cell = 18;
+      for (let row = 0, y = GROUND - 176; y < GROUND + 8; y += cell, row++) {
+        for (let x = (row % 2 ? cell / 2 : 0) + 5; x < W; x += cell) {
+          if (y - 7 > hill2(x)) c.fillStyle = '#4b5cba';
+          else if (y - 7 > hill1(x)) c.fillStyle = '#2c3982';
+          else continue;
+          c.fillText('산', x, y);
+        }
+      }
+    });
+    g.drawImage(layer, 0, 0);
+    for (let i = 0; i < 10; i++) {                         // 멀리 마을의 불 켜진 집들
+      const hx = 16 + U.hash(i, 61) * (W - 32), hy = GROUND - 26 - U.hash(i, 62) * 40;
+      Fx.stamp(g, Fx.glyph('집', 14, '#ffcf87', 800), hx, hy, 0.7 + 0.3 * Math.sin(t * 1.3 + i));
+    }
+  }
+  function drawGroundWords(g, t, pile) {
+    const layer = U.layer('words-ground', W, H, (c) => {
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      // 눈밭 바탕은 어둡게 깔아 뒤의 산 글자가 비치지 않게 한다
+      c.fillStyle = '#080b1e'; c.beginPath(); c.moveTo(0, H);
+      for (let x = 0; x <= W; x += 6) c.lineTo(x, GROUND + 5 * Math.sin(x / 71 + 1) + 3 * Math.sin(x / 23));
+      c.lineTo(W, H); c.closePath(); c.fill();
+      const cell = 19;
+      for (let row = 0, y = GROUND + 15; y < H + 10; y += cell, row++) {
+        const q = (y - GROUND) / (H - GROUND);
+        c.font = `800 ${row === 0 ? 18 : 17}px "Pretendard", sans-serif`;
+        c.fillStyle = U.mix('#e6ecff', '#2c3a86', Math.min(1, q * 1.7)); c.globalAlpha = 1 - 0.72 * q;
+        for (let x = (row % 2 ? cell / 2 : 0) + 6; x < W; x += cell) c.fillText('눈', x, y + (row === 0 ? 5 * Math.sin(x / 71 + 1) : 0));
+      }
+    });
+    g.drawImage(layer, 0, 0);
+    for (let i = 0; i < 30; i++) {                          // 반짝이는 눈 글자 몇 개
+      const row = Math.floor(U.hash(i, 72) * 9), y = GROUND + 15 + row * 19, x = (row % 2 ? 9.5 : 0) + 6 + Math.floor(U.hash(i, 71) * 28) * 19;
+      const a = Math.pow(Math.max(0, Math.sin(t * (1.2 + U.hash(i, 73) * 2.2) + U.hash(i, 74) * TAU)), 2);
+      Fx.stamp(g, Fx.glyph('눈', 17, '#ffffff', 800), x, y, 0.8 * a * (0.5 + pile * 0.5));
+    }
+  }
+  // 한 달치 흙띠를 '삽질삽질…' 세 줄로. 가장자리는 글자 단위로 계단지게 끊긴다.
+  const WORD_ROWS = 3;
+  function bandWords(k, gold) {
+    const thick = BAND_TOP[k] - bandBottom(k), wLayer = 2 * BASE_HALF + 8;
+    return U.layer(`words-band-${k}-${gold ? 'g' : 's'}`, wLayer, Math.ceil(thick), (c) => {
+      const cx = wLayer / 2, rowH = thick / WORD_ROWS;
+      const yOf = (ly) => GROUND - BAND_TOP[k] + ly;        // 띠 안의 y → 무대 y
+      c.fillStyle = gold ? '#2a1f06' : '#21181e';
+      c.beginPath(); c.moveTo(cx - halfAt(yOf(0)), 0); c.lineTo(cx + halfAt(yOf(0)), 0); c.lineTo(cx + halfAt(yOf(thick)), thick); c.lineTo(cx - halfAt(yOf(thick)), thick); c.closePath(); c.fill();
+      const px = Math.min(13, rowH * 1.06), cw = px * 1.0;
+      c.font = `800 ${px}px "Pretendard", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      for (let r = 0; r < WORD_ROWS; r++) {
+        const yc = (r + 0.5) * rowH, half = halfAt(yOf(yc)) - 5, n = Math.floor(2 * half / cw), x0 = cx - (n - 1) * cw / 2;
+        for (let i = 0; i < n; i++) {
+          const jil = (i + r + k) % 2 === 1;
+          c.fillStyle = gold ? (jil ? '#ffe08a' : '#ffc94a') : (jil ? '#a98a70' : '#c9a688');
+          c.fillText(jil ? '질' : '삽', x0 + i * cw, yc + 0.5);
+        }
+      }
+    });
+  }
+  function drawMoundWords(g, t, st) {
+    if (!st.dig) return;
+    const h = fillH(st, t); if (h <= 0.5) return;
+    const digging = t < st.dig.t + st.dig.D;
+    g.save();
+    const gAll = st.gildT == null ? 0 : U.prog(t - st.gildT, 0.1, 1.1);
+    if (gAll > 0.01) { g.globalCompositeOperation = 'lighter'; U.dot(g, CX, GROUND - h * 0.5, 900, '#ffb340', 0.2 * gAll * (0.9 + 0.1 * Math.sin(t * 2.3)), 0.08); g.globalCompositeOperation = 'source-over'; }
+    const nb = bandsShown(h), x0 = CX - BASE_HALF - 4;
+    for (let k = 0; k < nb; k++) {
+      const thick = BAND_TOP[k] - bandBottom(k), rowH = thick / WORD_ROWS;
+      // 아래 줄부터 한 줄씩 쌓인다
+      const rows = Math.min(WORD_ROWS, Math.max(1, Math.ceil((h - bandBottom(k)) / rowH - 0.02)));
+      const sy = (WORD_ROWS - rows) * rowH, yTopBand = GROUND - BAND_TOP[k];
+      const gk = bandGild(st, t, k);
+      const soil = bandWords(k, false), gold = bandWords(k, true);
+      const put = (layer, a) => { if (a <= 0.003) return; g.globalAlpha = a; g.drawImage(layer, 0, sy, layer.width, layer.height - sy, x0, yTopBand + sy, layer.width, layer.height - sy); };
+      if (gk < 1) put(soil, 1);
+      if (gk > 0) put(gold, gk);
+      const fl = Math.max(gk > 0 && gk < 1 ? 0.8 * Math.sin(Math.PI * gk) : 0, REWIND ? 0 : 0.75 * bandFlash(st, t, k));
+      if (fl > 0.01) {                                       // 금으로 바뀌는 순간·불꽃이 솟는 순간 글자가 하얗게 번쩍
+        g.globalCompositeOperation = 'lighter'; put(gold, fl); put(gold, fl * 0.6); g.globalCompositeOperation = 'source-over';
+      }
+      g.globalAlpha = 1;
+    }
+    // 맨 위에 쌓이는 눈: '눈' 글자 한 줄
+    const cap = digging ? 0 : U.prog(t - (st.dig.t + st.dig.D), 0.3, 2.5) * (st.snow ? 1 : 0);
+    if (cap > 0.01) {
+      const yTop = GROUND - h, hT = halfAt(yTop), n = Math.floor(2 * hT / 15);
+      for (let i = 0; i < n; i++) Fx.stamp(g, Fx.glyph('눈', 14, '#f2f6ff', 800), CX - (n - 1) * 7.5 + i * 15, yTop - 7, U.prog(cap * n, i * 0.7, i * 0.7 + 1.5));
+    }
+    g.restore(); g.globalAlpha = 1;
+  }
+  // 삽에서 날아가는 흙덩이도 글자 '삽'
+  function drawClodsWords(g, t, st, wx) {
+    if (!st.dig) return;
+    const d = st.dig, tau = t - d.t; if (tau < 0 || tau > d.D + 0.6) return;
+    d.clods.forEach((c, j) => {
+      const age = tau - c.born; if (age < 0 || age > c.fl + 0.12) return;
+      const q = Math.min(1, age / c.fl);
+      const h0 = digCountAt(d, c.born) / YEAR_DAYS * FULL_H, h1 = digCountAt(d, c.born + c.fl) / YEAR_DAYS * FULL_H;
+      const sx = wx + 70 * WORKER_SCALE, sy = GROUND - h0 - 112 * WORKER_SCALE;
+      const side = U.hash(j, 41) * 2 - 1;
+      const ex = CX + side * (halfAt(GROUND - h1) - 14), ey = GROUND - h1;
+      const x = U.lerp(sx, ex, q), y = U.lerp(sy, ey, q) - 70 * Math.sin(Math.PI * q) * (0.6 + 0.6 * U.hash(j, 42));
+      const sp = Fx.glyph(j % 2 ? '질' : '삽', 17, '#e2c3a4', 800);
+      g.save(); g.translate(x, y); g.rotate((age * 14 + j) * (side > 0 ? 1 : -1)); g.globalAlpha = age < c.fl ? 1 : 1 - (age - c.fl) / 0.12;
+      g.drawImage(sp, -sp.width / 2, -sp.height / 2); g.restore();
+    });
+    g.globalAlpha = 1;
+  }
+
   // 치수선: 도면처럼 높이를 적는다 (H = 365삽)
   function drawDimension(g, t, st) {
     if (!st.dig) return;
@@ -442,7 +589,7 @@
     if (!st.spawn) return null;
     const tau = t - st.spawn.t; if (tau < 0) return null;
     const h = fillH(st, t);
-    const o = { x: CX - 4, y: GROUND - h, scale: WORKER_SCALE, sx: 1, sy: 1, pose: Worker.POSES.idle, face: 'smile', look: 0, lookY: 0, blink: 0, snowCap: 0, ghost: null, clod: null, blush: 0.55, mark: null, drops: 0 };
+    const o = { x: CX + 22, y: GROUND - h, scale: WORKER_SCALE, sx: 1, sy: 1, pose: Worker.POSES.idle, face: 'smile', look: 0, lookY: 0, blink: 0, snowCap: 0, ghost: null, clod: null, blush: 0.55, mark: null, drops: 0 };
     // 숨쉬기·눈 깜박임
     const idle = Object.assign({}, Worker.POSES.idle, { bob: 1.2 * Math.sin(t * 2.4) });
     o.pose = idle;
@@ -549,7 +696,7 @@
     g.restore();
     // 머리 위 표시(?)
     if (o.mark) {
-      g.save(); g.translate(o.x + 52, o.y - 132 * o.scale); g.scale(o.mark.pop, o.mark.pop); g.rotate(0.2);
+      g.save(); g.translate(o.x + 84, o.y - 108 * o.scale); g.scale(o.mark.pop, o.mark.pop); g.rotate(0.2);
       g.font = '400 54px "Black Han Sans", "Pretendard", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.lineWidth = 8; g.strokeStyle = '#141833'; g.lineJoin = 'round'; g.globalAlpha = o.mark.a; g.strokeText(o.mark.text, 0, 0);
       g.fillStyle = '#ffffff'; g.fillText(o.mark.text, 0, 0); g.restore(); g.globalAlpha = 1;
@@ -571,13 +718,13 @@
     if (alpha <= 0.003) return;
     g.save(); g.globalAlpha = alpha; g.translate(x, y); g.scale(scale, scale);
     g.font = '800 29px "Pretendard", sans-serif'; const w1 = g.measureText(label + ' ').width;
-    g.font = '800 33px "JetBrains Mono", monospace'; const w2 = g.measureText(o.widest || value).width;
+    g.font = '800 34px "Pretendard", sans-serif'; const w2 = g.measureText(o.widest || value).width + 2;
     const w = w1 + w2 + 40;
     U.roundRect(g, -w / 2, -29, w, 58, 29); g.fillStyle = o.bg || 'rgba(10,14,44,0.88)'; g.fill();
     g.lineWidth = 2.6; g.strokeStyle = o.edge; g.stroke();
     g.textBaseline = 'middle'; g.textAlign = 'left';
     g.font = '800 29px "Pretendard", sans-serif'; g.fillStyle = o.labelColor || '#ffffff'; g.fillText(label + ' ', -w / 2 + 20, 1);
-    g.font = '800 33px "JetBrains Mono", monospace'; g.fillStyle = o.valueColor; g.fillText(value, -w / 2 + 20 + w1, 2);
+    g.font = '800 34px "Pretendard", sans-serif'; g.fillStyle = o.valueColor; g.fillText(value, -w / 2 + 20 + w1, 1);
     g.restore(); g.globalAlpha = 1;
   }
   // 계수판 둘은 흙더미 윗면 양옆에 떠서, 쌓이는 만큼 삽질러와 함께 올라간다
@@ -590,15 +737,15 @@
     const c = Math.round(digCountAt(d, tau));
     const pop = 1 + 0.22 * U.bump(tau - d.D, 0, 0.08, 0.1, 0.35);
     const a = U.prog(tau, 0, 0.12), y = hudY(st, t);
-    drawPill(g, 94, y, 0.86 * pop, a, '삽질', String(c), { edge: tau >= d.D ? '#ffd76a' : 'rgba(255,255,255,0.35)', valueColor: '#ffd76a', widest: String(d.n) });
+    drawPill(g, 98, y, 0.92 * pop, a, '삽질', String(c), { edge: tau >= d.D ? '#ffd76a' : 'rgba(255,255,255,0.35)', valueColor: '#ffd76a', widest: String(d.n) });
     const year = st.yearSet ? st.yearSet.v : 2026;
     const newYear = st.yearUp && t >= st.yearUp.lock;
     let txt;
     if (newYear) txt = `${year + st.yearUp.by}.01.01`;
     else { let day = Math.max(1, Math.min(YEAR_DAYS, Math.ceil(digCountAt(d, tau)))), m = 0; while (day > MONTH_DAYS[m]) { day -= MONTH_DAYS[m]; m++; } txt = `${year}.${pad2(m + 1)}.${pad2(day)}`; }
     const dp = newYear ? 1 + 0.3 * U.bump(t - st.yearUp.lock, 0, 0.08, 0.1, 0.4) : 1;
-    g.save(); g.globalAlpha = a; g.translate(94, y - 46); g.scale(dp, dp);
-    g.font = '700 23px "JetBrains Mono", monospace'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    g.save(); g.globalAlpha = a; g.translate(98, y - 48); g.scale(dp, dp);
+    g.font = '800 25px "Pretendard", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
     g.lineWidth = 6; g.strokeStyle = 'rgba(8,10,34,0.85)'; g.strokeText(txt, 0, 0);
     g.fillStyle = newYear ? '#ffd76a' : '#bfd4ff'; g.fillText(txt, 0, 0);
     g.restore(); g.globalAlpha = 1;
@@ -622,10 +769,10 @@
     if (st.gildT != null) for (let k = 0; k < d.labeled; k++) { const gt = st.gildT + k * GILD_STEP + 0.03; if (t >= gt) last = Math.max(last, gt); }
     const pop = 1 + (cleared ? 0.34 : 0.16) * U.bump(t - last, 0, 0.05, 0.07, cleared ? 0.5 : 0.2);
     const col = cleared ? '#ffd76a' : '#ff6b7d';
-    drawPill(g, 446, hudY(st, t), 0.86 * pop, U.prog(t - d.bandT[0], 0, 0.1), '헛삽질', String(w.v), { edge: col, valueColor: col, labelColor: cleared ? '#fff3d1' : '#ffd3d9', widest: '12', bg: cleared ? 'rgba(44,30,4,0.9)' : 'rgba(44,8,20,0.9)' });
+    drawPill(g, 442, hudY(st, t), 0.92 * pop, U.prog(t - d.bandT[0], 0, 0.1), '헛삽질', String(w.v), { edge: col, valueColor: col, labelColor: cleared ? '#fff3d1' : '#ffd3d9', widest: '12', bg: cleared ? 'rgba(44,30,4,0.9)' : 'rgba(44,8,20,0.9)' });
     if (cleared) {                                          // 0이 되는 순간 반짝
       const q = t - last;
-      if (q < 0.7) { g.save(); g.globalCompositeOperation = 'lighter'; U.dot(g, 446, hudY(st, t), 120 + 260 * U.easeOutCubic(q / 0.7), '#ffd76a', 0.55 * Math.pow(1 - q / 0.7, 2), 0.1); g.restore(); g.globalAlpha = 1; }
+      if (q < 0.7) { g.save(); g.globalCompositeOperation = 'lighter'; U.dot(g, 442, hudY(st, t), 120 + 260 * U.easeOutCubic(q / 0.7), '#ffd76a', 0.55 * Math.pow(1 - q / 0.7, 2), 0.1); g.restore(); g.globalAlpha = 1; }
     }
   }
 
@@ -688,9 +835,9 @@
         Fx.drawCentered(g, digitLayer(to[i], false), 0, 4 + (1 - roll) * BOARD.ch, 1, 1);
       } else if (changes && failing) {                                   // 반쯤 넘어가다 걸려서 도로 떨어진다
         let roll;
-        if (fail < 0.16) roll = 0.5 * U.easeOutCubic(fail / 0.16);
-        else if (fail < 0.56) roll = 0.5 + 0.03 * Math.sin(fail * 60);
-        else roll = 0.5 * (1 - U.easeOutBack(U.prog(fail, 0.56, 0.8), 2.2));
+        if (fail < 0.16) roll = 0.64 * U.easeOutCubic(fail / 0.16);
+        else if (fail < 0.56) roll = 0.64 + 0.03 * Math.sin(fail * 60);
+        else roll = 0.64 * (1 - U.easeOutBack(U.prog(fail, 0.56, 0.8), 2.2));
         Fx.drawCentered(g, digitLayer(from[i], false), 0, 4 - roll * BOARD.ch, 1, 1);
         Fx.drawCentered(g, digitLayer(next[i], false), 0, 4 + (1 - roll) * BOARD.ch, 1, 1);
       } else {
@@ -769,38 +916,40 @@
     if (!st.yearFail) return;
     const tau = t - st.yearFail.t - 0.25; if (tau < 0) return;
     const fx = st.say && st.say.thanked ? t - st.say.fireT : -1;          // 고치는 줄의 Enter부터
-    if (fx > 0.34) return;
+    const gone = st.gildT != null ? U.prog(t - st.gildT, 0, 0.22) : (fx > 1.2 ? 1 : 0);
+    if (fx >= 0 && gone >= 1) return;
     const hit = U.prog(tau, 0, 0.11);
-    const sc = (1.9 - 0.9 * U.easeOutCubic(hit)) * (1 + 0.05 * U.bump(tau, 0.11, 0.15, 0.16, 0.3));
+    const sc0 = (1.9 - 0.9 * U.easeOutCubic(hit)) * (1 + 0.05 * U.bump(tau, 0.11, 0.15, 0.16, 0.3));
     const flip = fx >= 0 ? U.prog(fx, 0, 0.12) : 0;                        // 0→0.5 빨간 면이 접히고, 0.5→1 민트 면이 펴진다
     const fixed = flip >= 0.5;
     const sqY = fx >= 0 ? Math.max(0.02, Math.abs(Math.cos(Math.PI * flip))) : 1;
-    const outQ = fx >= 0 ? U.easeInCubic(U.prog(fx, 0.2, 0.34)) : 0;       // 말풍선이 뜨기 전에 위로 빠져나간다
+    const dock = fx >= 0 ? U.easeInOutCubic(U.prog(fx, 0.12, 0.3)) : 0;    // 뒤집힌 뒤에는 작아져 왼쪽에 비켜 선다(말풍선 자리 비우기)
     const l1 = '새해 진입 실패', l2 = `사유: ${st.yearFail.message}`;
-    g.save(); g.translate(CX, COUNT_Y + 4 - 70 * outQ); g.rotate(fixed ? 0 : -0.07); g.scale(sc, sc * sqY); g.globalAlpha = hit * (1 - outQ);
-    g.font = '800 44px "Pretendard", sans-serif'; const w1 = g.measureText(l1).width;
-    g.font = '700 33px "Pretendard", sans-serif'; const w2 = g.measureText(l2).width;
-    const w = Math.max(w1, w2) + 60, h = 140;
+    const x = U.lerp(CX, 132, dock), y = U.lerp(COUNT_Y + 4, COUNT_Y + 30, dock), sc = sc0 * U.lerp(1, 0.56, dock);
+    g.save(); g.translate(x, y); g.rotate(fixed ? -0.05 * dock : -0.07); g.scale(sc, sc * sqY); g.globalAlpha = hit * (1 - gone);
+    g.font = '700 32px "Pretendard", sans-serif'; const w1 = g.measureText(l1).width;
+    g.font = '800 42px "Pretendard", sans-serif'; const w2 = g.measureText(l2).width;
+    const w = Math.max(w1, w2) + 56, h = 142;
     const edge = fixed ? '#6ee7b7' : '#ff5a70';
-    U.roundRect(g, -w / 2, -h / 2, w, h, 16); g.fillStyle = fixed ? 'rgba(6,40,32,0.92)' : 'rgba(52,6,20,0.9)'; g.fill();
+    U.roundRect(g, -w / 2, -h / 2, w, h, 16); g.fillStyle = fixed ? 'rgba(6,40,32,0.94)' : 'rgba(52,6,20,0.92)'; g.fill();
     g.lineWidth = 5; g.strokeStyle = edge; g.stroke();
     U.roundRect(g, -w / 2 + 8, -h / 2 + 8, w - 16, h - 16, 10); g.lineWidth = 1.6; g.strokeStyle = U.rgba(edge, 0.7); g.stroke();
     g.textAlign = 'center'; g.textBaseline = 'middle';
     if (fixed) {
-      g.font = '400 54px "Black Han Sans", "Pretendard", sans-serif'; const tw = g.measureText('보완 완료').width;
-      g.fillStyle = '#6ee7b7'; g.fillText('보완 완료', 22, 2);
-      g.strokeStyle = '#6ee7b7'; g.lineWidth = 7; g.lineCap = 'round'; g.lineJoin = 'round';
-      const bx = -tw / 2 - 20; g.beginPath(); g.moveTo(bx - 14, 0); g.lineTo(bx - 3, 12); g.lineTo(bx + 16, -14); g.stroke();
+      g.font = '400 76px "Black Han Sans", "Pretendard", sans-serif'; const tw = g.measureText('보완 완료').width;
+      g.fillStyle = '#6ee7b7'; g.fillText('보완 완료', 30, 4);
+      g.strokeStyle = '#6ee7b7'; g.lineWidth = 10; g.lineCap = 'round'; g.lineJoin = 'round';
+      const bx = -tw / 2 - 22; g.beginPath(); g.moveTo(bx - 20, 2); g.lineTo(bx - 5, 18); g.lineTo(bx + 22, -20); g.stroke();
     } else {
-      g.font = '800 44px "Pretendard", sans-serif'; g.fillStyle = '#ff7083'; g.fillText(l1, 0, -25);
-      g.font = '700 33px "Pretendard", sans-serif'; g.fillStyle = '#ffd3d9'; g.fillText(l2, 0, 30);
+      g.font = '700 32px "Pretendard", sans-serif'; g.fillStyle = '#ff8794'; g.fillText(l1, 0, -34);   // 무슨 일인지는 작게
+      g.font = '800 42px "Pretendard", sans-serif'; g.fillStyle = '#ffffff'; g.fillText(l2, 0, 20);      // 왜인지는 크게
     }
     g.restore(); g.globalAlpha = 1;
     // 도장 찍히는 순간의 먼지 고리
     if (tau > 0.09 && tau < 0.45) {
       g.save(); g.globalCompositeOperation = 'lighter'; const f = 1 - (tau - 0.09) / 0.36;
       g.globalAlpha = 0.5 * f; g.strokeStyle = '#ff7083'; g.lineWidth = 4 * f + 0.5;
-      g.beginPath(); g.ellipse(CX, COUNT_Y + 4, 210 + 80 * (1 - f), 78 + 30 * (1 - f), -0.07, 0, TAU); g.stroke(); g.restore(); g.globalAlpha = 1;
+      g.beginPath(); g.ellipse(CX, COUNT_Y + 4, 240 + 60 * (1 - f), 84 + 30 * (1 - f), -0.07, 0, TAU); g.stroke(); g.restore(); g.globalAlpha = 1;
     }
   }
 
@@ -882,22 +1031,55 @@
     const goldAmt = st.gildT == null ? 0 : U.prog(t - st.gildT, 0.1, 1.1);
     const dawn = st.yearUp ? U.prog(t - st.yearUp.lock, 0, 1.6) : 0;
     const sT = opts && opts.snowT != null ? opts.snowT : snowClock(st, t);
-
-    Fx.sky(g, 0, W, H, lift);
-    if (cold > 0) { g.fillStyle = `rgba(4,6,20,${0.34 * cold})`; g.fillRect(0, 0, W, H); }
-    drawStars(g, t, Math.min(1, lift * 0.6 + dawn * 0.35));
-    drawFar(g, t, lift, dawn);
-    if (!rewind) for (const b of st.bursts) { if (b.type === 'shape') drawShapeBurst(g, t, b); else Fx.firework(g, t, b); }
     const snowN = st.snow ? st.snow.n : 0;
-    if (st.snow) Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0, layerHi: 0.78, gold: snowN - 1 });
     const pile = st.snow ? U.clamp01((t - st.snow.t - 2) / 9) * Math.min(1, snowN / 200) : 0;
-    drawGround(g, t, st, lift, goldAmt, pile);
-    drawMound(g, t, st, lift);
+    const ws = workerState(t, st), wx = ws ? ws.x : CX;
+
+    /* 글자 세상 → 진짜 세상: 2027이 잠기는 순간 연도판에서 고리가 퍼지고, 고리 안쪽부터 글자가 진짜 그림이 된다.
+       reveal 0 = 전부 글자, 1 = 전부 진짜. 글자 세상을 끄면(TYPED 꺼짐) 처음부터 진짜 그림이다. */
+    const reveal = !TYPED ? 1 : (st.yearUp ? U.easeOutCubic(U.prog(t - st.yearUp.lock, 0, 0.8)) : 0);
+    const RMAX = 1520, rr = reveal * RMAX;
+    const real = (fn) => {                                    // 진짜 그림은 고리 안쪽에만
+      if (reveal <= 0) return;
+      if (reveal >= 1) { fn(); return; }
+      g.save(); g.beginPath(); g.arc(CX, BOARD.cy, rr, 0, TAU); g.clip(); fn(); g.restore();
+    };
+    const backReal = () => {
+      Fx.sky(g, 0, W, H, lift);
+      if (cold > 0) { g.fillStyle = `rgba(4,6,20,${0.34 * cold})`; g.fillRect(0, 0, W, H); }
+      drawStars(g, t, Math.min(1, lift * 0.6 + dawn * 0.35));
+      drawFar(g, t, lift, dawn);
+      if (!rewind) for (const b of st.bursts) { if (b.type === 'shape') drawShapeBurst(g, t, b); else Fx.firework(g, t, b); }
+      if (st.snow) Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0, layerHi: 0.78, gold: snowN - 1 });
+      drawGround(g, t, st, lift, goldAmt, pile);
+      drawMound(g, t, st, lift);
+      if (!rewind) drawClods(g, t, st, wx);
+    };
+    const backWords = () => {
+      skyWords(g, cold);
+      drawStarsWords(g, t);
+      drawFarWords(g, t);
+      if (!rewind) for (const b of st.bursts) { if (b.type === 'shape') drawShapeBurst(g, t, b); else Fx.firework(g, t, b); }
+      if (st.snow) Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0, layerHi: 0.78, gold: snowN - 1, word: '눈' });
+      drawGroundWords(g, t, pile);
+      drawMoundWords(g, t, st);
+      if (!rewind) drawClodsWords(g, t, st, wx);
+    };
+    if (reveal < 1) backWords();
+    real(backReal);
+    drawMoundLabels(g, t, st, 1 - U.prog(reveal, 0.15, 0.5));
     drawDimension(g, t, st);
-    const ws = workerState(t, st);
-    if (!rewind) drawClods(g, t, st, ws ? ws.x : CX);
     const o = drawWorker(g, t, st);
-    if (st.snow) Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0.78, layerHi: 1, gold: snowN - 1 });   // 가까운 눈만 앞에
+    // 가까운 눈만 삽질러 앞에
+    if (st.snow && reveal < 1) Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0.78, layerHi: 1, gold: snowN - 1, word: '눈' });
+    if (st.snow) real(() => Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0.78, layerHi: 1, gold: snowN - 1 }));
+    if (reveal > 0 && reveal < 1) {                           // 퍼져 나가는 고리의 테두리
+      g.save(); g.globalCompositeOperation = 'lighter';
+      const f = 1 - reveal;
+      g.strokeStyle = '#ffe9a8'; g.globalAlpha = Math.min(1, 1.6 * f); g.lineWidth = 3 + 9 * f; g.beginPath(); g.arc(CX, BOARD.cy, rr, 0, TAU); g.stroke();
+      g.strokeStyle = '#ffd76a'; g.globalAlpha = 0.5 * f; g.lineWidth = 26 * f + 4; g.beginPath(); g.arc(CX, BOARD.cy, Math.max(0, rr - 14), 0, TAU); g.stroke();
+      g.restore(); g.globalAlpha = 1;
+    }
     if (cold > 0.01) {                                        // 실패한 동안은 색이 빠진다(도장·연도판은 그 위에 선명하게)
       g.globalCompositeOperation = 'saturation'; g.fillStyle = `rgba(128,128,128,${0.6 * cold})`; g.fillRect(0, 0, W, H);
       g.globalCompositeOperation = 'source-over';
@@ -910,7 +1092,7 @@
     Fx.vignette(g, 0, W, H, 0.4);
     g.restore();
     REWIND = false;
-    return { ambient: amb, lift };
+    return { ambient: amb, lift, reveal };
   }
 
   // 소리 합성용: 무대에서 일어나는 일의 시각

@@ -53,32 +53,61 @@
     g.restore(); g.globalAlpha = 1;
   };
 
+  // ───────────────────────── 글자 조각 ─────────────────────────
+  // 글자 하나를 작은 그림판에 그려 두고 찍는다(글자 세상에서 눈·별·흙덩이로 쓴다)
+  const glyphCache = new Map();
+  Fx.glyph = function (ch, px, color, weight) {
+    const key = ch + '|' + px + '|' + color + '|' + (weight || 800);
+    let c = glyphCache.get(key);
+    if (c) return c;
+    c = document.createElement('canvas'); const s = Math.ceil(px * 1.4); c.width = c.height = s;
+    const g = c.getContext('2d');
+    g.font = `${weight || 800} ${px}px "Pretendard", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = color;
+    g.fillText(ch, s / 2, s / 2 + px * 0.04);
+    glyphCache.set(key, c);
+    return c;
+  };
+  Fx.stamp = function (g, sprite, x, y, alpha) {
+    if (alpha <= 0.003) return;
+    const prev = g.globalAlpha; g.globalAlpha = alpha > 1 ? 1 : alpha;
+    g.drawImage(sprite, x - sprite.width / 2, y - sprite.height / 2);
+    g.globalAlpha = prev;
+  };
+
   // ───────────────────────── 눈 ─────────────────────────
   // n송이. t0부터 위에서 차례로 내려온다(공중에서 갑자기 나타나지 않는다).
+  const WORD_PX = [11, 12, 14, 17, 20, 25];              // 글자 눈송이 크기(먼 눈 → 가까운 눈)
   Fx.snow = function (g, t, t0, n, x0, w, h, opts) {
     opts = opts || {};
     const layerLo = opts.layerLo == null ? 0 : opts.layerLo, layerHi = opts.layerHi == null ? 1 : opts.layerHi;
     const fadeOut = opts.fade == null ? 1 : opts.fade;
     if (fadeOut <= 0) return;
-    g.save(); g.globalCompositeOperation = 'lighter';
+    g.save(); g.globalCompositeOperation = opts.word ? 'source-over' : 'lighter';
     const span = h + 80;
+    const age = t - t0;
+    if (age < 0) { g.restore(); return; }
+    const front = -40 + age * 3600;                      // 처음 반 초 동안 위에서부터 쏟아져 내려와 화면을 채운다
     for (let i = 0; i < n; i++) {
-      const d = U.hash(i, 101);                         // 0 먼 눈 … 1 가까운 눈
+      const isGold = i === opts.gold;
+      const d = isGold ? 0.9 : U.hash(i, 101);          // 0 먼 눈 … 1 가까운 눈 (금색 한 송이는 늘 가까운 눈)
       if (d < layerLo || d >= layerHi) continue;
       const dd = d * d;
       const speed = 85 + 210 * dd + 30 * U.hash(i, 102);
-      const period = span / speed;
-      const ts = t0 + U.hash(i, 103) * period;
-      const age = t - ts;
-      if (age < 0) continue;
-      const y = -40 + ((age * speed) % span);
+      // 송이마다 제 높이에서 시작해 끝없이 돈다 → n송이가 늘 화면(과 위아래 여백) 안에 있다
+      const y = -40 + ((age * speed + (isGold ? 0.36 : U.hash(i, 103)) * span) % span);
+      if (y > front) continue;
       const sway = (10 + 26 * dd) * Math.sin(t * (0.6 + 0.9 * U.hash(i, 104)) + U.hash(i, 105) * TAU);
-      const bx = U.hash(i, 106) * (w + 60) - 30;
-      const x = x0 + bx + sway + (opts.wind || 0) * age * (0.4 + dd);
+      const bx = isGold ? w * 0.78 : U.hash(i, 106) * (w + 60) - 30;
+      const x = x0 + bx + sway;
       const xx = x0 + (((x - x0) % (w + 60)) + (w + 60)) % (w + 60) - 30;
       const size = 5 + 17 * dd;
       const a = (0.34 + 0.6 * d) * fadeOut;
-      if (i === opts.gold) U.dot(g, xx, y, Math.max(22, size * 2.4), '#ffd24a', fadeOut, 0.42);     // 딱 한 송이는 금색
+      if (opts.word) {                                    // 글자 세상: 눈송이가 '눈'이라는 글자(자리는 진짜 눈과 똑같다)
+        const px = WORD_PX[Math.min(WORD_PX.length - 1, Math.floor(dd * WORD_PX.length))];
+        if (isGold) Fx.stamp(g, Fx.glyph(opts.word, 30, '#ffd24a', 800), xx, y, fadeOut);
+        else Fx.stamp(g, Fx.glyph(opts.word, px, '#eaf2ff', 800), xx, y, Math.min(1, a * 1.25));
+      }
+      else if (isGold) U.dot(g, xx, y, 46, '#ffd24a', fadeOut, 0.42);     // 딱 한 송이는 금색
       else U.dot(g, xx, y, size * 1.9, '#eaf2ff', a, 0.34);
     }
     g.restore(); g.globalAlpha = 1;

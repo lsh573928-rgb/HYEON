@@ -32,6 +32,7 @@ function parseArgs(argv) {
     else if (k === '--script') a.script = argv[++i];
     else if (k === '--crf') a.crf = +argv[++i];
     else if (k === '--no-cold-open') a.noCold = true;
+    else if (k === '--typed') a.typed = argv[++i];
     else if (k === '--from') a.from = +argv[++i];
     else if (k === '--to') a.to = +argv[++i];
     else { console.error('모르는 옵션: ' + k); process.exit(1); }
@@ -49,7 +50,7 @@ function parseArgs(argv) {
   page.on('pageerror', e => errors.push(String(e && e.stack || e)));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
-  const url = 'file://' + path.join(HERE, 'index.html') + '?capture=1' + (args.noCold ? '&cold=0' : '');
+  const url = 'file://' + path.join(HERE, 'index.html') + '?capture=1' + (args.noCold ? '&cold=0' : '') + (args.typed != null ? '&typed=' + args.typed : '');
   if (args.script) {
     // 다른 대본 파일(window.SCRIPT_TEXT = `...`)을 기본 대본보다 먼저 넣는다.
     const txt = fs.readFileSync(path.resolve(args.script), 'utf8');

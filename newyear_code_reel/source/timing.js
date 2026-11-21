@@ -6,22 +6,23 @@ window.TIMING = {
   fps: 30,
   duration: 16.0,
   music: { bpm: 120, firstDownbeat: 0.5, bars: 8, beatsPerBar: 4 },
-  // 영상 첫머리: 완성 장면 → 코드 전체 선택 → 삭제 → 장면이 되감기며 빈 무대로
-  coldOpen: { hold: 0.17, select: 0.37, rewindEnd: 0.87 },
+  /* 영상 첫머리: 완성 장면(0~hold) → 코드 전체 선택(hold~select) → 삭제(select, 첫 박) → 장면이 거꾸로 풀린다.
+     오른쪽 창은 rewindEnd에 비워진 채 첫 줄을 치기 시작하고, 왼쪽 무대는 stageRewindEnd까지 계속 풀린다(빈 무대로 오래 두지 않으려고). */
+  coldOpen: { hold: 0.25, select: 0.5, rewindEnd: 0.9, stageRewindEnd: 1.4 },
   start: 0.9,
   cps: 22,
   enterDelay: 0.1,
   gap: 0.3,
   lines: [
     { fireAt: 1.50, cps: 27 },    // year = 2026        → 2.00 연도판이 내려앉는다
-    { fireAt: 2.50 },             // me = 삽질러()       → 3.00 삽질러 착지
-    { fireAt: 3.75 },             // snow.fall(300)     → 4.00 눈
-    { fireAt: 5.00 },             // me.삽질(365)        → 5.25~7.00 삽질(달마다 한 박자)
+    { fireAt: 2.25, cps: 27 },    // me = 삽질러()       → 2.75 삽질러 착지
+    { fireAt: 3.00, cps: 25 },    // snow.fall(300)     → 3.25 눈
+    { fireAt: 4.00 },             // me.삽질(365)        → 4.25~7.00 삽질(한 달에 8분음표 하나, 끝의 두 달은 몰아서)
     { fireAt: 7.25 },             // countdown(3)       → 7.50 · 8.00 · 8.50
     { fireAt: 9.00 },             // year += 1          → 카운트다운이 끝나는 박에 Enter … 오류
     { fireAt: 10.25, cps: 20 },   // say("수고했어")    → 10.50 말풍선, 11.00부터 금빛
     { fireAt: 11.6667 },          // year += 1          → 12.00에 '철컥'
     { fireAt: 12.75 },            // fireworks(12)      → 13.00부터, 마지막 삽 모양은 14.50
-    { before: 1.25, cps: 14 },    // # 친구에게 보내기
+    { before: 0.9, cps: 16 },     // # 수고한 친구에게
   ],
 };

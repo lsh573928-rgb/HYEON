@@ -48,7 +48,7 @@
     }
   }
 
-  function drawCard(g, fileName, renamedAgo) {
+  function drawCard(g, fileName, renamedAgo, crumb) {
     g.save();
     U.roundRect(g, L.cardX, L.cardY, L.cardW, L.cardH, L.radius);
     g.fillStyle = THEME.card; g.fill();
@@ -66,6 +66,16 @@
     const hot = renamedAgo != null && renamedAgo >= 0 ? 1 - U.prog(renamedAgo, 0, 0.9) : 0;
     g.font = fontCode(24, hot > 0.3 ? 700 : 500); g.fillStyle = U.mix('#b4c0df', '#ffd479', hot); g.textBaseline = 'middle'; g.textAlign = 'left';
     g.fillText(fileName || L.fileName, L.cardX + 112, cy + 1);
+    if (crumb) {                                            // 파일 이름 / 지금 실행 중인 호출
+      const fw = g.measureText(fileName || L.fileName).width;
+      g.font = fontCode(22, 500); g.fillStyle = '#5d6a8f'; g.fillText('/', L.cardX + 112 + fw + 14, cy + 1);
+      let x = L.cardX + 112 + fw + 36;
+      for (const ch of Array.from(crumb)) {
+        const wide = Interp.cellWidth(ch) === 2;
+        g.font = wide ? fontKo(21, 700) : fontCode(22, 500); g.fillStyle = '#8f9cc0';
+        g.fillText(ch, x, cy + 1); x += wide ? 21 : 13.2;
+      }
+    }
     g.textBaseline = 'alphabetic';
     g.restore();
   }
@@ -139,12 +149,30 @@
     return null;
   }
 
-  /* 편집기 전체. tl: Timeline.build 결과. opts: {ambient:{color,a,y}} */
+  // 창 머리의 작은 알림표(전체 선택 → 삭제)
+  function drawChip(g, chip) {
+    if (!chip) return;
+    const pop = U.easeOutBack(U.prog(chip.age, 0, 0.12), 2.4), red = chip.kind === 'delete';
+    g.save(); g.font = fontKo(22, 800); const w = g.measureText(chip.text).width + 28;
+    g.translate(L.cardX + L.cardW - 62 - w / 2, L.cardY + L.tabH / 2); g.scale(pop, pop);
+    U.roundRect(g, -w / 2, -17, w, 34, 10); g.fillStyle = red ? 'rgba(255,107,125,0.22)' : 'rgba(96,150,255,0.26)'; g.fill();
+    g.lineWidth = 2; g.strokeStyle = red ? '#ff8f9c' : '#8fb4ff'; g.stroke();
+    g.fillStyle = red ? '#ffc2c9' : '#d5e3ff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(chip.text, 0, 1);
+    g.restore(); g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  }
+
+  /* 편집기 전체. tl: Timeline.build 결과.
+     opts: {ambient, fileName, renamedAgo, status, select(0..1 전체 선택이 덮인 정도), cleared(지워진 뒤), collapse(0..1 지워지는 중), chip} */
   function draw(g, t, tl, opts) {
     opts = opts || {};
     drawBackground(g, t, opts.ambient);
-    drawCard(g, opts.fileName, opts.renamedAgo);
-    if (opts.cleared) {                                      // 전체 삭제 직후: 빈 창에 커서만
+    const gone = opts.cleared && !(opts.collapse < 1);
+    // 지금(또는 마지막으로) 실행된 줄이 부른 것
+    let crumb = null;
+    if (!opts.cleared) for (const f of tl.fires) { if (f.t > t || f.silent) continue; const p = f.parsed; crumb = p.kind === 'call' ? p.name.split('.').pop() + '()' : (p.kind === 'assign' ? (p.value && p.value.call ? p.value.call + '()' : p.target) : crumb); }
+    drawCard(g, opts.fileName, opts.renamedAgo, crumb);
+    drawChip(g, opts.chip);
+    if (gone) {                                              // 전체 삭제 뒤: 빈 창에 커서만
       drawLive(g, t, false, false);
       if (Math.floor(t * 2.2) % 2 === 0) { g.fillStyle = THEME.cursor; g.fillRect(L.codeX + 3, rowY(0) - L.fontPx * 0.86, 4.5, L.fontPx * 1.08); }
       drawSignature(g);
@@ -156,29 +184,42 @@
 
     let active = -1;
     for (const ln of tl.lines) if (t >= ln.typeStart) active = ln.idx;
+    const failIdx = tl.errorRows.length ? tl.errorRows[0].afterLine : -1;     // 낚는 말이 예고한 그 줄
+    const lastIdx = tl.lines.length - 1;
 
     g.save();
     g.beginPath(); g.rect(L.cardX, L.cardY + L.tabH, L.cardW, L.cardH - L.tabH); g.clip();
+    if (opts.cleared) { const q = U.clamp01(opts.collapse); g.translate(-46 * U.easeInCubic(q), 0); g.globalAlpha = 1 - q; }   // 지워지는 순간: 왼쪽으로 쓸려 나간다
+    const baseAlpha = g.globalAlpha;
     for (const ln of tl.lines) {
       const st = Timeline.lineState(ln, t);
-      if (st.state === 'idle') continue;
       // 오류 줄이 끼어들 때는 뒤 줄들이 스르륵 밀려 내려간다
       let row = ln.idx;
       for (const e of tl.errorRows) if (e.afterLine < ln.idx) row += U.easeOutCubic(U.prog(t - e.t, 0, 0.22));
       const y = rowY(row);
+      const isFailLine = ln.idx === failIdx;
+      if (st.state === 'idle') {                             // 아직 안 친 줄도 번호는 보인다(예고한 줄은 노랗게)
+        g.textAlign = 'right';
+        if (isFailLine) { g.font = fontCode(28, 800); g.fillStyle = '#ffe14d'; g.fillText(String(ln.idx + 1), L.gutterX + 2, y - 1); }
+        else { g.font = fontCode(24, 500); g.fillStyle = THEME.gutter; g.fillText(String(ln.idx + 1), L.gutterX, y - 2); }
+        g.textAlign = 'left';
+        continue;
+      }
       const txt = Timeline.visibleText(ln, t);
       const isActive = ln.idx === active && t < ln.fireAt + 0.25;
       const fixedAt = st.state === 'error' ? resolvedAt(tl, ln) : null;
       const dim = fixedAt != null ? 1 - 0.58 * U.prog(t - fixedAt, 0, 0.4) : 1;
+      const isCta = ln.idx === lastIdx && st.state === 'silent';             // 맨 끝의 주석 한 줄(보내 달라는 말)
+      const cta = isCta ? U.prog(t - ln.fireAt, 0, 0.3) : 0;
 
       if (isActive) { g.fillStyle = THEME.lineActive; g.fillRect(L.cardX, y - L.lineH * 0.7, L.cardW, L.lineH); }
 
       // 실행 순간: 줄 전체를 빛이 왼→오로 훑는다
       const f = st.fire;
-      if (f && !f.silent) {
+      if (f && (!f.silent || isCta)) {
         const dt = t - f.t;
         if (dt >= 0 && dt < 0.7) {
-          const col = f.ok ? THEME.ok : THEME.error;
+          const col = isCta ? '#ffd479' : (f.ok ? THEME.ok : THEME.error);
           g.fillStyle = U.rgba(col, (1 - U.prog(dt, 0, 0.7)) * 0.22); g.fillRect(L.cardX, y - L.lineH * 0.7, L.cardW, L.lineH);
           const sx = L.cardX + (L.cardW + 160) * U.easeOutCubic(U.prog(dt, 0, 0.32)) - 80;
           const sg = g.createLinearGradient(sx - 90, 0, sx + 90, 0);
@@ -187,26 +228,34 @@
         }
       }
 
-      g.globalAlpha = dim;
+      g.globalAlpha = baseAlpha * dim;
       // 줄 번호 / 실행 표시
       if (st.state === 'ok') {
         const p = U.easeOutCubic(U.prog(t - f.t, 0, 0.28));
         const pop = 1 + 0.5 * U.bump(t - f.t, 0, 0.1, 0.12, 0.34);
         drawCheck(g, L.gutterX - 13, y - 12, 20 * pop, THEME.ok, p);
       } else if (st.state === 'error') {
-        drawCross(g, L.gutterX - 13, y - 12, 22, THEME.error, U.prog(t - f.t, 0, 0.2));
+        // 오류가 난 줄: 한동안 줄 번호가 빨갛게 뛰다가 ✕로 바뀐다
+        const dt = t - f.t, hold = isFailLine ? 1.1 : 0;
+        if (dt < hold + 0.2) {
+          const a = 1 - U.prog(dt, hold, hold + 0.2), pop = 1 + 0.35 * U.bump(dt, 0, 0.08, 0.1, 0.4);
+          g.save(); g.globalAlpha *= a; g.translate(L.gutterX - 11, y - 12); g.scale(pop, pop);
+          g.font = fontCode(32, 800); g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = THEME.error; g.fillText(String(ln.idx + 1), 0, 1);
+          g.restore(); g.textBaseline = 'alphabetic';
+        }
+        if (dt >= hold) drawCross(g, L.gutterX - 13, y - 12, 22, THEME.error, U.prog(dt - hold, 0, 0.2));
       } else {
-        g.font = fontCode(24, 500); g.textAlign = 'right';
-        g.fillStyle = isActive ? THEME.gutterActive : THEME.gutter;
-        g.fillText(String(ln.idx + 1), L.gutterX, y - 2);
+        g.textAlign = 'right';
+        if (isFailLine) { g.font = fontCode(28, 800); g.fillStyle = '#ffe14d'; g.fillText(String(ln.idx + 1), L.gutterX + 2, y - 1); }
+        else { g.font = fontCode(24, 500); g.fillStyle = isActive ? THEME.gutterActive : THEME.gutter; g.fillText(String(ln.idx + 1), L.gutterX, y - 2); }
         g.textAlign = 'left';
       }
 
       // 글자
       const shake = st.state === 'error' ? Math.sin((t - f.t) * 70) * 6 * (1 - U.prog(t - f.t, 0, 0.35)) : 0;
-      const w = drawLineText(g, txt, L.codeX + shake, y, null);
+      const w = drawLineText(g, txt, L.codeX + shake, y, cta > 0 ? { color: U.mix(THEME.comment, '#ffe9a8', cta), plain: true } : null);
       if (st.state === 'error') wavyUnderline(g, L.codeX, y + 13, w, THEME.error, 0.95 * dim);
-      g.globalAlpha = 1;
+      g.globalAlpha = baseAlpha;
 
       // 커서(치는 동안은 켜 두고, 쉬면 깜박임)
       if (ln.idx === active && st.state === 'typing') {
@@ -234,7 +283,7 @@
       const y = rowY(row) - (1 - p) * L.lineH * 0.6;
       const fixed = resolvedAt(tl, src);
       const dim = fixed != null ? 1 - 0.58 * U.prog(t - fixed, 0, 0.4) : 1;
-      g.globalAlpha = p * dim;
+      g.globalAlpha = baseAlpha * p * dim;
       const flash = 0.16 + 0.2 * (1 - U.prog(dt, 0, 0.8)) + (fixed == null || t < fixed ? 0.05 * Math.sin(t * 7) : 0);
       g.fillStyle = U.rgba(THEME.error, flash); g.fillRect(L.cardX, y - L.lineH * 0.7, L.cardW, L.lineH);
       g.fillStyle = THEME.error; g.fillRect(L.cardX, y - L.lineH * 0.7, 6, L.lineH);
@@ -242,11 +291,11 @@
       let cells = 0; for (const ch of Array.from(e.text)) cells += Interp.cellWidth(ch) === 2 ? HANGUL_ADV : 1;
       const epx = Math.max(18, Math.min(31, Math.floor((L.cardW - 44) / (cells * 0.6))));
       drawLineText(g, e.text, L.codeX - 44, y - 2, { color: '#ffb3bd', px: epx, plain: true });
-      g.globalAlpha = 1;
+      g.globalAlpha = baseAlpha;
     }
 
     // 다음 줄 대기 커서
-    if (active >= 0 && active < tl.lines.length - 1) {
+    if (active >= 0 && active < tl.lines.length - 1 && !opts.cleared) {
       const cur = tl.lines[active], stc = Timeline.lineState(cur, t);
       if (stc.state !== 'typing' && stc.state !== 'idle' && Math.floor(t * 2.2) % 2 === 0) {
         let row = active + 1;
@@ -256,7 +305,9 @@
     }
     g.restore();
 
+    if (opts.cleared) g.globalAlpha = 1 - U.clamp01(opts.collapse);
     drawLog(g, t, tl, opts.status);
+    g.globalAlpha = 1;
     drawSignature(g);
   }
   // 서명(오른쪽 아래는 앱의 좋아요·댓글 단추가 덮으므로 왼쪽 아래에 둔다)

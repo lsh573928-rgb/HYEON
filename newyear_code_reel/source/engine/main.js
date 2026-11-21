@@ -22,7 +22,8 @@
   const DURATION = T.duration;
   const FRAMES = Math.round(DURATION * FPS);
   const noCold = /[?&]cold=0/.test(location.search) || window.NO_COLD_OPEN;
-  const COLD = (!noCold && T.coldOpen) || { hold: 0, select: 0, rewindEnd: 0 };
+  const COLD = (!noCold && T.coldOpen) || { hold: 0, select: 0, rewindEnd: 0, stageRewindEnd: 0 };
+  const SRE = COLD.stageRewindEnd != null ? COLD.stageRewindEnd : COLD.rewindEnd;   // 무대가 다 풀리는 시각(창보다 늦다)
 
   /* 되감기: 17초를 그대로 빨리 돌리면 정신없기만 하므로 큰 동작만 차례로 보여 준다.
      ① 연도판 2027 → 2026  ② 금빛이 빠진다  ③ 흙더미가 내려앉는다  ④ 삽질러가 올라간다  ⑤ 연도판이 올라간다
@@ -38,16 +39,19 @@
     let acc = 0;
     return seg.map(s => { const q0 = acc / total; acc += s[0]; return { q0, q1: acc / total, a: s[1], b: s[2] }; });
   })();
-  function storyTime(Tv) {
-    if (Tv >= COLD.rewindEnd) return Tv;
+  function storyTime(Tv) {                                   // 무대의 이야기 시각
+    if (Tv >= SRE) return Tv;
     if (Tv < COLD.select) return DURATION + Tv;                                   // 완성 장면이 계속 움직인다
-    const q = (Tv - COLD.select) / (COLD.rewindEnd - COLD.select);
+    const q = (Tv - COLD.select) / (SRE - COLD.select);
     for (const s of REW) if (q >= s.q0 && q < s.q1) return U.lerp(s.a, s.b, (q - s.q0) / (s.q1 - s.q0));
-    return COLD.rewindEnd;
+    return SRE;
   }
-  const rewinding = (Tv) => Tv >= COLD.select && Tv < COLD.rewindEnd;
+  const rewinding = (Tv) => Tv >= COLD.select && Tv < SRE;
+  // 오른쪽 창의 시각: 지워진 뒤(select~rewindEnd)에는 비어 있고, 그 뒤로는 무대가 아직 풀리는 중이어도 정속으로 첫 줄을 친다
+  const editorTime = (Tv) => (Tv < COLD.select ? DURATION + Tv : Tv);
+  const editorCleared = (Tv) => Tv >= COLD.select && Tv < COLD.rewindEnd;
   // 되감는 동안 눈은 제 시계로 천천히 거꾸로 올라간다(구간마다 시각이 건너뛰어도 눈발이 튀지 않게)
-  const rewindSnowT = (Tv, t) => (st.snow && t > st.snow.t + 0.6 ? DURATION + COLD.select - (Tv - COLD.select) * 5 : t);
+  const rewindSnowT = (Tv, t) => (st.snow && t > st.snow.t + 0.6 ? DURATION + COLD.select - (Tv - COLD.select) * 3 : t);
 
   // ── 위쪽 큰 글자: 처음엔 낚는 말, 새해로 넘어가면 맺는 말 ──
   const failLine = tl.lines.find(ln => ln.fires[0] && !ln.fires[0].ok && !ln.fires[0].silent);
@@ -83,12 +87,16 @@
     g.drawImage(layer, -layer.width / 2, -layer.height / 2); g.restore();
   }
   function drawHeadline(Tv) {
+    // 끝에서는 맺는 말이 접히고 낚는 말이 다시 펴져 첫 프레임과 이어진다(반복 재생할 때 글자가 뚝 바뀌지 않게)
+    const loop = isFinite(swapT);
+    const endOut = loop ? U.prog(Tv, DURATION - 0.26, DURATION - 0.12) : 0;
+    const endIn = loop ? U.easeOutBack(U.prog(Tv, DURATION - 0.14, DURATION), 1.6) : 0;
     // 낚는 말은 첫 프레임부터 가만히 떠 있다(첫 프레임이 곧 미리보기 그림)
-    if (Tv < swapT + 0.14) {
-      const out = 1 - U.prog(Tv, swapT, swapT + 0.14);
+    if (Tv < swapT + 0.14 || endIn > 0) {
+      const out = Tv < swapT + 0.14 ? 1 - U.prog(Tv, swapT, swapT + 0.14) : endIn;
       // 예고한 그 줄에서 정말 오류가 나는 순간: 둘째 줄이 빨갛게 덜컥
       const ft = failLine ? Tv - failLine.fireAt : -1;
-      const hot = ft >= 0 && ft < 1.1 && Tv >= COLD.rewindEnd;
+      const hot = ft >= 0 && ft < 1.1 && Tv >= COLD.rewindEnd && Tv < swapT;
       const red = hot ? (ft < 0.9 ? 1 : 1 - U.prog(ft, 0.9, 1.1)) : 0;
       const dx = hot ? Math.sin(ft * 70) * 10 * (1 - U.prog(ft, 0, 0.4)) : 0;
       const sc = hot ? 1 + 0.07 * U.bump(ft, 0, 0.08, 0.1, 0.4) : 1;
@@ -96,8 +104,8 @@
       if (red < 1) drawHeadLine(COPY.hook[1], '#ffe14d', HEAD.y2, sc, out, dx);
       if (red > 0) { g.globalAlpha = red; drawHeadLine(COPY.hook[1], '#ff6b7d', HEAD.y2, sc, out, dx); g.globalAlpha = 1; }
     }
-    if (Tv >= swapT + 0.12) {
-      const p = U.easeOutBack(U.prog(Tv, swapT + 0.12, swapT + 0.36), 2.2);
+    if (Tv >= swapT + 0.12 && endOut < 1) {
+      const p = U.easeOutBack(U.prog(Tv, swapT + 0.12, swapT + 0.36), 2.2) * (1 - endOut);
       const pop = 1 + 0.08 * U.bump(Tv, swapT + 0.12, swapT + 0.3, swapT + 0.32, swapT + 0.55);
       drawHeadLine(COPY.final[0], '#ffffff', HEAD.y1, pop, p, 0);
       drawHeadLine(COPY.final[1], '#ffe14d', HEAD.y2, pop, p, 0);
@@ -116,7 +124,7 @@
   // ── 되감기 표시 ──
   function drawRewind(Tv, frame) {
     if (!rewinding(Tv)) return;
-    const q = (Tv - COLD.select) / (COLD.rewindEnd - COLD.select);
+    const q = (Tv - COLD.select) / (SRE - COLD.select);
     const a = U.bump(q, 0, 0.1, 0.78, 1);
     g.save();
     for (let i = 0; i < 5; i++) {                             // 가로 잡음 띠(무대 쪽만)
@@ -173,18 +181,20 @@
   const status = lastRun ? { t: lastRun.t + 1.0, text: `오류 ${errors}건 · 헛삽질 ${waste}건` } : null;
 
   function render(frame) {
-    const Tv = frame / FPS, t = storyTime(Tv), rw = rewinding(Tv);
+    const Tv = frame / FPS, t = storyTime(Tv), tE = editorTime(Tv), rw = rewinding(Tv), cleared = editorCleared(Tv);
     g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
     g.clearRect(0, 0, W, H);
     const out = Stage.draw(g, t, tl, st, { rewind: rw, snowT: rw ? rewindSnowT(Tv, t) : null });
-    const fn = fileNameAt(t);
-    Editor.draw(g, t, tl, {
-      ambient: out.ambient, fileName: rw ? 'untitled.py' : fn.name, renamedAgo: rw ? null : fn.ago, status,
-      select: Tv < COLD.select && Tv >= COLD.hold ? U.prog(Tv, COLD.hold, COLD.hold + (COLD.select - COLD.hold) * 0.55) : 0,
-      cleared: rw,
+    const fn = fileNameAt(tE);
+    const selecting = Tv >= COLD.hold && Tv < COLD.select;
+    Editor.draw(g, cleared ? DURATION + Tv : tE, tl, {
+      ambient: out.ambient, fileName: cleared ? 'untitled.py' : fn.name, renamedAgo: cleared ? null : fn.ago, status,
+      select: selecting || cleared ? U.prog(Tv, COLD.hold, COLD.hold + (COLD.select - COLD.hold) * 0.55) : 0,
+      cleared, collapse: cleared ? (Tv - COLD.select) / 0.13 : 0,
+      chip: selecting ? { text: '전체 선택', kind: 'select', age: Tv - COLD.hold } : (cleared && Tv < COLD.select + 0.34 ? { text: '삭제', kind: 'delete', age: Tv - COLD.select } : null),
     });
     drawDivider(out.ambient);
-    if (!rw) drawCouriers(t);
+    if (!cleared) drawCouriers(tE);
     drawRewind(Tv, frame);
     drawHeadline(Tv);
     Fx.grain(g, frame, W, H, 0.05);
@@ -193,7 +203,7 @@
   // 소리 합성용 시각표(영상 시각 기준)
   function events() {
     const ev = [{ t: 0, type: 'hook_slam' }];
-    if (COLD.rewindEnd > COLD.select) ev.push({ t: COLD.hold, type: 'select_all' }, { t: COLD.select, type: 'rewind', dur: COLD.rewindEnd - COLD.select });
+    if (SRE > COLD.select) ev.push({ t: COLD.hold, type: 'select_all' }, { t: COLD.select, type: 'delete_all' }, { t: COLD.select, type: 'rewind', dur: SRE - COLD.select });
     for (const k of tl.keys) ev.push({ t: k.t, type: k.kind === 'enter' ? (k.ok ? 'enter' : 'enter_error') : k.kind, line: k.line });
     for (const f of tl.fires) {
       if (f.silent) continue;
