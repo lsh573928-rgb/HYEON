@@ -11,7 +11,7 @@
   const BANDS = 12, FULL_H = 410, BAND_H = FULL_H / BANDS; // 12달 = 410px(달마다 날 수만큼)
   const BASE_HALF = 210, TOP_HALF = 96;
   const YEAR_DAYS = 365;
-  const BOARD = { cy: 570, cw: 92, ch: 132, gap: 8 };
+  const BOARD = { cy: 562, cw: 118, ch: 160, gap: 8 };
   /* 박자: 영상 전체가 120bpm(한 박 0.5초) 격자 위에 있다 — 소리(audio.py)가 같은 격자로 음악을 깐다. */
   const COURIER = 0.25;                                  // 코드 줄에서 무대까지 빛이 날아오는 시간(8분음표)
   const COUNT_STEP = 0.5;                                // 카운트다운 한 박
@@ -28,7 +28,7 @@
   const CUM_DAYS = (function () { let a = 0; return MONTH_DAYS.map(d => (a += d)); })();
   // 삽질 박자: 1~10월은 8분음표(0.25초)마다, 11·12월은 16분음표로 몰아서 닫힌다(삽질 시작 기준 시각, 12월이 2.75초)
   const DIG_GRID = Array.from({ length: 10 }, (_, k) => 0.25 * (k + 1)).concat([2.625, 2.75]);
-  const SOIL = ['#5e4740', '#6d5348'];
+  const SOIL = ['#7a5d50', '#8a6a5b'];
   const GOLD = ['#f3b63a', '#ffd15e'];
 
   let REWIND = false;                                    // 되감는 중인지(draw가 켠다)
@@ -184,15 +184,19 @@
         burstT = t0 + 1.5; x = 96; y = 806; R = 120; type = 'shape'; shape = 'shovel'; color = '#ffd76a'; color2 = '#ffffff'; nP = 0;
       }
       const rise = 0.3 + 0.1 * h4;
-      // 쏘는 자리: (i번째) 달의 옆구리. 쌓인 달이 없으면 바닥에서.
-      let lx = x, ly = GROUND - 8, band = -1;
-      if (bandsUp > 0) {
-        band = (months ? months[i] : i) % bandsUp;
-        const ym = GROUND - (bandBottom(band) + Math.min(BAND_TOP[band], st.dig.h)) / 2;
-        lx = CX + side * (halfAt(ym) - 6); ly = ym;
-      }
-      out.push({ t0: burstT - rise, rise, x, y, ground: ly, drift: lx - x, color, color2, n: nP, R, type, shape, seed: 1000 + i * 17, life, band, h1 });
+      out.push({ t0: burstT - rise, rise, x, y, color, color2, n: nP, R, type, shape, seed: 1000 + i * 17, life, h1, side });
     }
+    // 쏘는 순서 = 반복문의 i = 그 달(months[i])
+    out.sort((a, b) => a.t0 - b.t0);
+    out.forEach((b, j) => {
+      let lx = b.x, ly = GROUND - 8, band = -1;
+      if (bandsUp > 0) {
+        band = (months ? months[j] : j) % bandsUp;
+        const ym = GROUND - (bandBottom(band) + Math.min(BAND_TOP[band], st.dig.h)) / 2;
+        lx = CX + b.side * (halfAt(ym) - 6); ly = ym;
+      }
+      Object.assign(b, { band, ground: ly, drift: lx - b.x });
+    });
     return out;
   }
   // 삽 모양 불꽃: 점들이 터져 나와 삽 모양으로 잠깐 모였다가 흩어진다(찾는 재미)
@@ -215,7 +219,7 @@
   function drawShapeBurst(g, t, b) {
     Fx.firework(g, t, Object.assign({}, b, { n: 0, type: 'peony' }));          // 올라가는 불씨·섬광만
     const tau = t - (b.t0 + b.rise); if (tau < 0 || tau > 2.8) return;
-    const pts = getShovelPts(); const rot = -0.3, sc = 1.0, cs = Math.cos(rot), sn = Math.sin(rot);
+    const pts = getShovelPts(); const rot = -0.3, sc = 1.3, cs = Math.cos(rot), sn = Math.sin(rot);
     g.save(); g.globalCompositeOperation = 'lighter';
     for (const p of pts) {
       const q = U.clamp01(tau / (0.3 + 0.14 * p.u)), e = U.easeOutCubic(q);
@@ -225,7 +229,7 @@
       const x = U.lerp(b.x, tx, e) + Math.cos(ang) * over + (p.v - 0.5) * 30 * fall;
       const y = U.lerp(b.y, ty, e) + Math.sin(ang) * over + 150 * fall * fall;
       const a = (1 - U.prog(tau, 1.8, 2.7)) * (q < 1 ? 1 : 0.72 + 0.28 * Math.sin(t * (9 + 9 * p.u) + p.v * 30));
-      U.dot(g, x, y, 14, p.k < 0.3 ? '#ffffff' : '#ffd76a', a, 0.34);
+      U.dot(g, x, y, 16, '#ffd76a', a, 0.34);
     }
     g.restore(); g.globalAlpha = 1;
   }
@@ -603,7 +607,7 @@
     const newYear = st.yearUp && t >= st.yearUp.lock;
     let txt;
     if (newYear) txt = `${year + st.yearUp.by}.01.01`;
-    else { let day = Math.max(1, Math.min(YEAR_DAYS, Math.ceil(digCountAt(d, tau)))), m = 0; while (day > MONTH_DAYS[m]) { day -= MONTH_DAYS[m]; m++; } txt = `${year}.${pad2(m + 1)}.${pad2(day)}`; }
+    else { let day = Math.max(1, Math.min(YEAR_DAYS, c)), m = 0; while (day > MONTH_DAYS[m]) { day -= MONTH_DAYS[m]; m++; } txt = `${year}.${pad2(m + 1)}.${pad2(day)}`; }
     const dp = newYear ? 1 + 0.3 * U.bump(t - st.yearUp.lock, 0, 0.08, 0.1, 0.4) : 1;
     g.save(); g.globalAlpha = a; g.translate(98, y - 48); g.scale(dp, dp);
     g.font = '800 25px "Pretendard", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
@@ -638,9 +642,9 @@
   }
 
   // ───────────── 연도판(공항 안내판처럼 한 칸씩 넘어간다) ─────────────
-  const FONT_DIGIT = '400 112px "Black Han Sans", "Pretendard", sans-serif';
+  const FONT_DIGIT = '400 150px "Black Han Sans", "Pretendard", sans-serif';
   function digitLayer(d, gold) {
-    return Fx.glowText('bd' + d + (gold ? 'g' : 'w'), d, FONT_DIGIT, gold ? '#ffe08a' : '#eef3ff', gold ? '#ff9d1e' : '#5f8bff', gold ? 18 : 10, null);
+    return Fx.glowText('bd' + d + (gold ? 'g' : 'w'), d, FONT_DIGIT, gold ? '#ffe08a' : '#eef3ff', gold ? '#ff9d1e' : '#5f8bff', gold ? 8 : 4, null);
   }
   function drawBoard(g, t, st) {
     if (!st.yearSet) return;
@@ -653,13 +657,9 @@
     const failing = !REWIND && fail >= 0 && fail < 0.95 && (up < 0);
     let sx = 0;
     if (failing && fail > 0.16 && fail < 0.56) sx = Math.sin(fail * 75) * 9 * (1 - U.prog(fail, 0.16, 0.56));
-    if (ul >= 0) {                                           // 금빛 후광 + 잠기는 순간 퍼지는 고리
+    if (ul >= 0) {                                           // 금빛 후광
       g.save(); g.globalCompositeOperation = 'lighter';
       U.dot(g, CX, BOARD.cy, 760, '#ffb340', 0.3 * U.prog(ul, 0, 0.35) * (0.9 + 0.1 * Math.sin(t * 2.7)), 0.08);
-      if (ul < 0.8) {
-        g.strokeStyle = '#ffd76a';
-        for (const k of [0, 0.18]) { const qq = U.clamp01(ul / 0.8 - k); if (qq <= 0) continue; g.globalAlpha = 0.75 * (1 - qq); g.lineWidth = 7 * (1 - qq) + 1; g.beginPath(); g.ellipse(CX, BOARD.cy, 230 + 330 * U.easeOutCubic(qq), 90 + 230 * U.easeOutCubic(qq), 0, 0, TAU); g.stroke(); }
-      }
       g.restore(); g.globalAlpha = 1;
     }
     for (let i = 0; i < n; i++) {
@@ -764,11 +764,11 @@
     const i = Math.min(n - 1, Math.floor(tau / COUNT_STEP)), lt = tau - i * COUNT_STEP;
     const num = String(n - i);
     const sc = 1.35 - 0.35 * U.easeOutCubic(U.prog(lt, 0, 0.16)) - 0.06 * U.prog(lt, 0.2, COUNT_STEP);
-    const a = U.prog(lt, 0, 0.05) * (1 - U.prog(lt, COUNT_STEP - 0.09, COUNT_STEP));
+    const a = 1 - U.prog(lt, COUNT_STEP - 0.09, COUNT_STEP);
     Fx.drawCentered(g, Fx.glowText('cnt' + num, num, FONT_COUNT, '#ffffff', '#ff86c1', 30, { w: 10, color: '#141833' }), CX, COUNT_Y, sc, a);
     g.save(); g.globalCompositeOperation = 'lighter';
     g.globalAlpha = 0.7 * (1 - U.prog(lt, 0, 0.4)); g.strokeStyle = '#ffd1e6'; g.lineWidth = 6 * (1 - U.prog(lt, 0, 0.4)) + 1;
-    g.beginPath(); g.arc(CX, COUNT_Y, 80 + 150 * U.easeOutCubic(U.prog(lt, 0, 0.4)), 0, TAU); g.stroke();
+    g.beginPath(); g.arc(CX, COUNT_Y, 55 + 160 * U.easeOutCubic(U.prog(lt, 0, 0.4)), 0, TAU); g.stroke();
     g.restore(); g.globalAlpha = 1;
   }
 
@@ -781,7 +781,7 @@
     if (fx >= 0 && gone >= 1) return;
     const hit = U.prog(tau, 0, 0.11);
     const sc0 = (1.9 - 0.9 * U.easeOutCubic(hit)) * (1 + 0.05 * U.bump(tau, 0.11, 0.15, 0.16, 0.3));
-    const flip = fx >= 0 ? U.prog(fx, 0, 0.12) : 0;                        // 0→0.5 빨간 면이 접히고, 0.5→1 민트 면이 펴진다
+    const flip = fx >= 0 ? U.prog(t - st.say.t, 0, 0.12) : 0;              // 0→0.5 빨간 면이 접히고, 0.5→1 민트 면이 펴진다("수고했어"가 닿은 뒤)
     const fixed = flip >= 0.5;
     const sqY = fx >= 0 ? Math.max(0.02, Math.abs(Math.cos(Math.PI * flip))) : 1;
     const dock = fx >= 0 ? U.easeInOutCubic(U.prog(fx, 0.12, 0.3)) : 0;    // 뒤집힌 뒤에는 작아져 왼쪽에 비켜 선다(말풍선 자리 비우기)
@@ -906,6 +906,10 @@
     drawGround(g, t, st, lift, goldAmt, pile);
     drawMound(g, t, st, lift);
     if (!rewind) drawClods(g, t, st, wx);
+    if (ws && st.fw && t > st.fw.t) {
+      g.save(); g.fillStyle = 'rgba(3,4,8,0.85)'; g.beginPath();
+      g.ellipse(ws.x + 6, ws.y - 72 * WORKER_SCALE, 80 * WORKER_SCALE * 0.75, 100 * WORKER_SCALE * 0.75, 0, 0, TAU); g.fill(); g.restore();
+    }
     const o = drawWorker(g, t, st);
     if (o) drawSweat(g, t, o);
     drawBoard(g, t, st);
@@ -929,8 +933,19 @@
     drawCounter(g, t, st, workerState(t, st));
     drawWaste(g, t, st);
     if (!rewind) { drawCount(g, t, st); drawStamp(g, t, st); drawBubble(g, t, st); }
+    if (opts && opts.cta) drawCta(g, t, opts.cta);
     g.restore();
     REWIND = false;
+  }
+  // 맨 끝 주석 줄(# 수고한 친구에게)이 돌면 무대 가운데에 같은 말을 띄운다(소리를 끈 사람도 보게)
+  function drawCta(g, t, cta) {
+    const p = U.easeOutBack(U.prog(t - cta.t, 0, 0.3), 2.2); if (p <= 0) return;
+    g.save(); g.translate(CX, COUNT_Y + 6); g.scale(p, p);
+    g.font = '800 34px "Pretendard", sans-serif'; const w = g.measureText(cta.text).width + 56;
+    U.roundRect(g, -w / 2, -30, w, 60, 30); g.fillStyle = 'rgba(30,22,4,0.92)'; g.fill();
+    g.lineWidth = 3; g.strokeStyle = '#ffd76a'; g.stroke();
+    g.fillStyle = '#ffe9a8'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(cta.text, 0, 2);
+    g.restore(); g.globalAlpha = 1;
   }
 
   // 소리 합성용: 무대에서 일어나는 일의 시각
@@ -952,7 +967,7 @@
     if (st.count) for (let i = 0; i < st.count.n; i++) ev.push({ t: st.count.t + i * COUNT_STEP, type: 'count', left: st.count.n - i });
     if (st.yearFail) ev.push({ t: st.yearFail.t, type: 'jam' }, { t: st.yearFail.t + 0.25, type: 'stamp' }, { t: st.yearFail.t + 0.56, type: 'jam_drop' });
     if (st.say) {
-      if (st.say.thanked && st.yearFail) ev.push({ t: st.say.fireT, type: 'fix_stamp' });
+      if (st.say.thanked && st.yearFail) ev.push({ t: st.say.t, type: 'fix_stamp' });
       ev.push({ t: st.say.t, type: 'bubble', thanked: st.say.thanked });
       Array.from(st.say.text).forEach((c, i) => { if (c !== ' ') ev.push({ t: st.say.t + sayGlyphDelay(i), type: 'say_glyph', i }); });
     }
@@ -968,5 +983,5 @@
 
   // 검증 스크립트가 화면에서 찾아볼 자리(숫자를 파이썬 쪽에 따로 적어 두지 않도록 여기서 내보낸다)
   const LAYOUT = { W, H, CX, GROUND, BANDS, BAND_H, FULL_H, BASE_HALF, TOP_HALF, BOARD, COUNT_Y, WORKER_SCALE, YEAR_DAYS, SOIL, GOLD, MONTH_DAYS, BAND_TOP };
-  window.Stage = { REGISTRY, META, NY, collect, drawScene, drawOverlay, soundEvents, dayAt, W, H, CX, GROUND, BOARD, COURIER, COUNT_STEP, ROLL, GILD_STEP, DROP, fillH, LAYOUT };
+  window.Stage = { REGISTRY, META, NY, collect, drawScene, drawOverlay, soundEvents, dayAt, workerState, W, H, CX, GROUND, BOARD, COURIER, COUNT_STEP, ROLL, GILD_STEP, DROP, fillH, LAYOUT };
 })();

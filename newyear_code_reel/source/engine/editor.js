@@ -109,7 +109,7 @@
   function prepare(tl, st, src, Stage, cold) {
     const lines = src.split('\n');
     const tokens = tokenizeJS(lines);
-    const maxCells = Math.floor((L.cardX + L.cardW - 12 - L.B.codeX) / monoW(L.B.font));
+    const maxCells = Math.floor((L.cardX + L.cardW - 4 - L.B.codeX) / monoW(L.B.font));
     const rows = wrapRows(lines, tokens, maxCells);
     const firstRow = [], lastRow = [];
     rows.forEach((r, i) => { if (r.first) firstRow[r.line] = i; lastRow[r.line] = i; });
@@ -145,12 +145,13 @@
     const steps = [];
     const S = (t, line, kind, val, extra) => steps.push(Object.assign({ t, line, kind: kind || 'run', val: val || null }, extra || {}));
     const busy = [];                                         // 대본 명령이 코드 창을 쓰는 구간
+    const doneT = [];                                        // 줄마다 실제로 다 돈 시각(✓와 터미널 줄은 이때)
     for (const f of tl.fires) {
       if (f.silent) continue;
       const key = f.ok ? f.key : f.tryKey;
-      const m = at[key]; if (!m) continue;
+      const m = at[key]; if (!m) { doneT[f.line] = f.t; continue; }
       const T = f.t, a = f.args || [];
-      let end = T + 0.5;
+      let end = T + 0.5, done = T + 0.25;
       if (key === 'year =') { S(T, m[0]); S(T + 0.12, m[1], 'run', `y = ${a[0]}`); }
       else if (key === '= 삽질러') { S(T, m[0]); S(T + 0.1, m[1]); S(T + 0.2, m[2]); }
       else if (key === 'snow.fall') { S(T, m[0]); S(T + 0.12, m[1], 'run', `n = ${a[0]}`); }
@@ -162,63 +163,88 @@
           const d = st.dig, n = Math.max(1, Math.round(d.D / 0.0834));
           for (let i = 0; i < n; i++) S(d.t + i * 0.0834, i % 2 ? m[2] : m[3], 'run', null, { dayAt: true });
           S(d.t + d.D, m[3], 'run', `d = ${d.n}`);
-          end = d.t + d.D + 0.4;
+          end = d.t + d.D + 0.4; done = d.t + d.D;
         }
       }
       else if (key === 'countdown' && st.count) {
         S(T, m[0]); S(T + 0.1, m[1]); S(T + 0.18, m[2]);
         for (let i = 0; i < st.count.n; i++) S(st.count.t + i * Stage.COUNT_STEP, m[3], 'run', `k = ${st.count.n - i}`);
-        end = st.count.t + st.count.n * Stage.COUNT_STEP;
+        end = done = st.count.t + st.count.n * Stage.COUNT_STEP;
       }
       else if (key === 'year +=') {
         S(T, m[0]); S(T + 0.08, m[1], 'run', `env.thanked = ${f.ok}`);
-        if (!f.ok) { S(T + 0.16, m[2], 'error'); end = T + 1.25; }
+        if (!f.ok) { S(T + 0.2, m[2], 'error', 'env.thanked = false'); end = T + 1.25; }      // 왜 멈췄는지 값이 계속 보이게
         else {
-          S(T + 0.16, m[3], 'run', `env.year = ${f.env.year}`);
-          if (st.yearUp) { S(st.yearUp.lock, R.cell, 'gold', 'cell = 5'); end = st.yearUp.lock + 0.9; }
+          S(T + 0.2, m[3], 'run', `env.year = ${f.env.year}`);
+          if (st.yearUp) { S(st.yearUp.lock, R.cell, 'gold', 'cell = 5'); end = st.yearUp.lock + 0.9; done = st.yearUp.lock; }
         }
       }
-      else if (key === 'say') { S(T, m[0]); S(T + 0.1, m[1], 'run', `text = "${a[0]}"`); if (f.env.thanked) S(T + 0.2, m[2], 'ok'); end = T + 0.8; }
+      else if (key === 'say') { S(T, m[0]); S(T + 0.1, m[1], 'run', `text = "${a[0]}"`); if (f.env.thanked) S(T + 0.25, m[2], 'ok', 'env.thanked = true'); end = T + 0.8; }
       else if (key === 'fireworks') {
-        S(T, m[0]); S(T + 0.1, m[1]); S(T + 0.18, m[2]);
+        S(T, m[0]); S(T + 0.04, m[1]); S(T + 0.08, m[2]);
         st.bursts.forEach((b, i) => S(b.t0, m[3], 'run', `i = ${i}`));
-        end = (st.bursts.length ? st.bursts[st.bursts.length - 1].t0 : T) + 0.6;
+        const last = st.bursts[st.bursts.length - 1];
+        end = (last ? last.t0 : T) + 0.6; done = last ? last.t0 + last.rise : T;
       }
       busy.push([T, end]);
+      doneT[f.line] = f.ok ? done : f.t;
     }
     // 대본이 쉬는 동안: 왼쪽 그림을 글자로 찍는 반복문이 돈다
     const isBusy = (t) => busy.some(([a, b]) => t >= a - 0.05 && t < b);
+    // 다음 명령까지 0.8초도 안 남으면 그림 반복문으로 넘어가지 않는다(창이 이리저리 뛰지 않게)
+    const nextBusy = (t) => { let n = Infinity; for (const [a] of busy) if (a > t && a < n) n = a; return n; };
     const loopBody = [R.forX, R.idx, R.line, R.ch, R.put];
     const cycle = [R.shrink, R.sobelCall, R.sMag, R.sDir, R.sMag, R.sDir, R.begin, R.forY]
       .concat(loopBody, loopBody, loopBody, [R.forY], loopBody, loopBody, [R.end, R.wDraw, R.wDraw, R.wPaint]);
     const tEnd = Math.max(tl.scriptEnd + 4, 20);
     let k = 0;
+    let idleFrom = null;
     for (let i = 0; i * 0.1 < tEnd; i++) {
       const t = i * 0.1;
-      if (isBusy(t)) { k = 0; continue; }
+      if (isBusy(t)) { k = 0; idleFrom = null; continue; }
+      if (idleFrom == null) idleFrom = t;
+      if (nextBusy(idleFrom) - idleFrom < 0.8) continue;
       S(t, cycle[k % cycle.length], 'run', null, { loop: true }); k++;
     }
     steps.sort((a, b) => a.t - b.t);
+    // 굴림 자리: 막대가 보이는 범위 안에 있으면 그대로 두고, 벗어날 때만 옮긴다(막대가 위에서 4분의 1쯤에 오게)
+    const visRows = Math.floor((L.B.h - L.B.head - 16) / L.B.pitch);
+    let scroll = 0;
+    for (const s of steps) {
+      const r = firstRow[s.line], r2 = lastRow[s.line];
+      if (r < scroll + 2 || r2 > scroll + visRows - 3) scroll = Math.max(0, r - Math.round(visRows * 0.25));
+      s.scroll = scroll;
+    }
 
     // 터미널 줄
-    const term = [{ t: cold.rewindEnd, text: 'node render.js 2026.py', color: '#8b95b7', prompt: true }];
+    const file = `${st.yearSet ? st.yearSet.v : 2026}.py`;
+    const term = [{ t: cold.rewindEnd, text: 'node render.js', color: '#8b95b7', prompt: true }];
     tl.fires.forEach((f) => {
       if (f.silent) return;
       const n = f.line + 1;
-      if (f.ok) term.push({ t: f.t, mark: '✓', markColor: THEME.ok, text: `${n}  ${f.log || ''}`, color: '#e6ebf7' });
+      if (f.ok) term.push({ t: doneT[f.line], mark: '✓', markColor: THEME.ok, text: `${n}  ${f.log || ''}`, color: '#e6ebf7' });
       else {
-        term.push({ t: f.t + 0.16, mark: '✕', markColor: THEME.error, text: `${n}  ${f.error.type}: ${f.error.message}`, color: '#ff8f9c' });
-        term.push({ t: f.t + 0.24, text: `    at 2026.py:${n}  ${f.text.trim()}`, color: '#b9707c' });
+        term.push({ t: f.t + 0.2, mark: '✕', markColor: THEME.error, text: `${n}  ${f.error.type}: ${f.error.message}`, color: '#ff8f9c' });
+        term.push({ t: f.t + 0.28, text: `    at ${file}:${n}  ${f.text.trim()}`, color: '#b9707c' });
       }
     });
+    // 디버거처럼: 예외가 나면 멈추고, 고치는 줄이 들어오면 이어서 돈다
+    const firstFail = tl.fires.find(f => !f.ok && !f.silent);
+    const pause = firstFail ? { t: firstFail.t + 0.2, resume: st.say && st.say.thanked && st.say.fireT > firstFail.t ? st.say.fireT : Infinity } : null;
+    if (pause) {
+      term.push({ t: pause.t + 0.25, text: '⏸ 예외에서 멈춤', color: THEME.gold, bold: true });
+      if (isFinite(pause.resume)) term.push({ t: pause.resume, text: `▶ 계속 (${file}:${firstFail.line + 2})`, color: THEME.ok, bold: true });
+    }
+    if (st.yearUp) term.push({ t: st.yearUp.lock + 0.05, text: `↻ ${file} → ${st.yearSet.v + st.yearUp.by}.py`, color: '#9fb4ff' });
     const lastRun = tl.fires.filter(f => !f.silent).pop();
     const errors = tl.fires.filter(f => !f.ok).length;
     const waste = st.dig ? (st.gildT != null ? 0 : st.dig.labeled) : 0;
-    const status = lastRun ? { t: lastRun.t + 1.0, text: `= 오류 ${errors}건 · 헛삽질 ${waste}건` } : null;
+    const runEnd = Math.max(...busy.map(b => b[1]), lastRun ? lastRun.t + 1.0 : 0) - 0.4;
+    const status = lastRun ? { t: runEnd, text: `= 오류 ${errors}건 · 헛삽질 ${waste}건` } : null;
     if (status) term.push({ t: status.t, text: status.text, color: THEME.gold, bold: true });
     term.sort((a, b) => a.t - b.t);
 
-    return { lines, rows, firstRow, lastRow, owner, steps, term, status, tl, st, Stage };
+    return { lines, rows, firstRow, lastRow, owner, steps, term, status, pause, doneT, tl, st, Stage };
   }
 
   // 시각 t의 디버거 막대 자리
@@ -282,8 +308,8 @@
     g.stroke(); g.restore();
   }
   function bar(g, y, h, color, alpha) {
-    g.fillStyle = U.rgba(color, 0.14 * alpha); g.fillRect(L.cardX + 1, y, L.cardW - 2, h);
-    g.fillStyle = U.rgba(color, Math.min(1, 0.95 * alpha)); g.fillRect(L.cardX + 1, y, 4, h);
+    g.fillStyle = U.rgba(color, Math.min(0.5, 0.28 * alpha)); g.fillRect(L.cardX + 1, y, L.cardW - 2, h);
+    g.fillStyle = U.rgba(color, Math.min(1, 0.95 * alpha)); g.fillRect(L.cardX + 1, y, 7, h);
   }
 
   // ───────── ① 2026.py ─────────
@@ -294,12 +320,14 @@
     const hy = A.y + A.head / 2;
     dots(g, hy);
     tabPill(g, L.cardX + 86, hy, opts.fileName, 20);
-    const failing = tl.fires.some(f => !f.ok && f.t <= t) && !(model.st.yearUp && t >= model.st.yearUp.t);
+    const P = model.pause;
+    const paused = P && t >= P.t && t < P.resume;
+    const resumed = P && t >= P.resume && t < P.resume + 0.9;
     const done = model.status && t >= model.status.t;
-    const label = opts.rewinding ? '◀◀ 되감기' : (failing ? '● 오류' : (done ? '■ 완료' : (t >= tl.lines[0].fireAt - 0.6 ? '● 실행 중' : '○ 대기')));
-    const lc = opts.rewinding ? '#9fb4ff' : (failing ? THEME.error : (done ? '#93a0c2' : THEME.ok));
+    const label = opts.rewinding ? '◀◀ 되감기' : (paused ? '⏸ 예외에서 멈춤' : (resumed ? '▶ 계속' : (done ? '■ 완료' : (t >= tl.lines[0].fireAt - 0.6 ? '● 실행 중' : '○ 대기'))));
+    const lc = opts.rewinding ? '#9fb4ff' : (paused ? THEME.error : (resumed ? THEME.ok : (done ? '#93a0c2' : THEME.ok)));
     g.font = fontKo(18, 800); g.textAlign = 'right'; g.fillStyle = lc; g.textBaseline = 'middle';
-    g.globalAlpha = label.startsWith('●') ? 0.75 + 0.25 * Math.sin(t * 7) : 1; g.fillText(label, L.cardX + L.cardW - 18, hy + 1);
+    g.globalAlpha = label.startsWith('●') || paused ? 0.75 + 0.25 * Math.sin(t * 7) : 1; g.fillText(label, L.cardX + L.cardW - 18, hy + 1);
     g.globalAlpha = 1; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
     g.fillStyle = 'rgba(255,255,255,0.06)'; g.fillRect(L.cardX, A.y + A.head, L.cardW, 1);
 
@@ -310,7 +338,7 @@
     g.save(); g.beginPath(); g.rect(L.cardX, A.y + A.head + 1, L.cardW, A.h - A.head - 2); g.clip();
     if (cur >= 0) {
       const f = tl.lines[cur].fires[0];
-      const slide = U.easeOutCubic(U.prog(t - curT, 0, 0.14));
+      const slide = U.easeOutCubic(U.prog(t - curT, -1 / 30, 0.12));
       const yb = U.lerp(prevLine >= 0 ? rowA(prevLine) : rowA(cur), rowA(cur), slide) - A.pitch * 0.74;
       const col = !f.ok ? THEME.error : (f.silent && cur === tl.lines.length - 1 ? THEME.gold : THEME.bar);
       bar(g, yb, A.pitch, col, 1);
@@ -324,7 +352,8 @@
       g.fillStyle = ln.idx === failIdx && !ran ? '#ffe14d' : (ran && !f.ok ? THEME.error : (ln.idx === cur ? THEME.gutterHot : THEME.gutter));
       g.fillText(String(ln.idx + 1), A.numX, y - 1); g.textAlign = 'left';
       if (ran && !f.silent) {
-        if (f.ok) drawCheck(g, A.markX, y - 9, 18, THEME.ok, U.easeOutCubic(U.prog(t - f.t, 0.06, 0.3)));
+        const dT = model.doneT[ln.idx] != null ? model.doneT[ln.idx] : f.t;
+        if (f.ok) drawCheck(g, A.markX, y - 9, 18, THEME.ok, U.easeOutCubic(U.prog(t - dT, 0.0, 0.24)));
         else drawCross(g, A.markX, y - 9, 18, THEME.error, U.prog(t - f.t, 0.06, 0.26));
       }
       // 글자: 아직 안 돈 줄은 흐리게
@@ -346,26 +375,47 @@
   }
 
   // ───────── ② newyear.js ─────────
+  // 막대가 선 줄의 지금 값(디버거의 인라인 값). 그림 반복문은 칸 하나를 차례로 훑는 한 개의 셈으로 만든다.
+  function valueOf(model, cur, t, opts) {
+    if (!cur) return null;
+    if (cur.dayAt) return `d = ${Math.max(1, model.Stage.dayAt(model.st, t))}`;
+    if (!cur.loop) return cur.val;
+    const src = model.lines[cur.line], cols = opts.cols || 67, rows = opts.rows || 133;
+    const j = (Math.floor(t * 30) * 97) % (cols * rows), x = j % cols, y = j / cols | 0;
+    if (/const i = |const ch = |const line = |out\.put|for \(let x/.test(src)) return `x = ${x}, y = ${y}`;
+    if (/for \(let y/.test(src)) return `y = ${y}`;
+    if (/mag\[i\]|dir\[i\]/.test(src)) return `i = ${j}`;
+    if (/pane\.drawImage/.test(src)) return `n = ${(opts.glyphs || 0).toLocaleString('en-US')}`;
+    if (/out\.begin/.test(src)) return `${cols}×${rows}`;
+    return null;
+  }
   function drawCode(g, t, model, opts) {
-    const B = L.B, Stage = model.Stage;
+    const B = L.B;
     card(g, B.y, B.h);
     const hy = B.y + B.head / 2;
     const { cur, prev } = stepAt(model, t);
+    // 창이 굴러가는 동안에는 머리글·굵은 줄 번호·값을 앞 단계 것으로 둔다(굴림이 반쯤 끝나면 바꾼다)
+    const k = cur ? U.easeInOutCubic(U.prog(t - cur.t, 0, 0.16)) : 1;
+    const moving = cur && prev && cur.scroll !== prev.scroll;
+    const shown = moving && k < 0.5 ? prev : cur;
     const w = tabPill(g, L.cardX + 16, hy, 'newyear.js', 18);
-    if (cur) crumb(g, L.cardX + 16 + w + 10, hy, model.owner[cur.line]);
+    if (shown) crumb(g, L.cardX + 16 + w + 10, hy, model.owner[shown.line]);
+    // 머리 오른쪽: 지금 값(전화에서도 읽히는 크기)
+    const val = valueOf(model, shown, t, opts);
+    if (val) {
+      const col = shown.kind === 'error' ? THEME.error : (shown.kind === 'gold' ? THEME.gold : (shown.kind === 'ok' ? THEME.ok : '#b9b7ff'));
+      g.font = fontCode(21, 800); g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillStyle = col;
+      g.fillText(val, L.cardX + L.cardW - 16, hy + 1); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    }
     g.fillStyle = 'rgba(255,255,255,0.06)'; g.fillRect(L.cardX, B.y + B.head, L.cardW, 1);
 
     const top = B.y + B.head + 8, bottom = B.y + B.h - 8, visRows = Math.floor((bottom - top) / B.pitch);
-    // 막대가 있는 줄이 창의 4할 높이에 오게 굴린다
-    const targetOf = (s) => (s ? Math.max(0, model.firstRow[s.line] - Math.round(visRows * 0.4)) : 0);
-    const k = cur ? U.easeInOutCubic(U.prog(t - cur.t, 0, cur.loop ? 0.08 : 0.16)) : 1;
-    const scroll = U.lerp(targetOf(prev), targetOf(cur), k);
+    const scroll = cur ? U.lerp(prev ? prev.scroll : cur.scroll, cur.scroll, k) : 0;
     g.save(); g.beginPath(); g.rect(L.cardX, top, L.cardW, bottom - top); g.clip();
     const r0 = Math.floor(scroll), off = (scroll - r0) * B.pitch;
-    if (cur) {
+    if (cur) {                                               // 막대: 진짜 디버거처럼 바로 그 줄로
       const r1 = model.firstRow[cur.line], r2 = model.lastRow[cur.line];
-      const prevR = prev ? model.firstRow[prev.line] : r1;
-      const yb = top + (U.lerp(prevR, r1, U.easeOutCubic(U.prog(t - cur.t, 0, 0.07))) - scroll) * B.pitch + 2;
+      const yb = top + (r1 - scroll) * B.pitch + 2;
       const col = cur.kind === 'error' ? THEME.error : (cur.kind === 'ok' ? THEME.ok : (cur.kind === 'gold' ? THEME.gold : THEME.bar));
       const flash = cur.kind === 'run' ? 1 : 1 + 0.6 * (1 - U.prog(t - cur.t, 0, 0.5));
       bar(g, yb, (r2 - r1 + 1) * B.pitch, col, flash);
@@ -373,29 +423,17 @@
     for (let r = r0; r < Math.min(model.rows.length, r0 + visRows + 2); r++) {
       const row = model.rows[r];
       const y = top + (r - r0) * B.pitch - off + B.pitch * 0.74;
-      const hot = cur && row.line === cur.line;
+      const hot = shown && row.line === shown.line;
       g.font = fontCode(14, hot ? 700 : 500); g.textAlign = 'right'; g.fillStyle = hot ? THEME.gutterHot : THEME.gutter;
       g.fillText(row.first ? String(row.line + 1) : '-', B.numX, y - 1); g.textAlign = 'left';
-      const ww = drawTokens(g, row.tokens, B.codeX, y, B.font, (tk) => THEME[tk.type] || THEME.text, hot ? 1 : 0.78);
-      // 지금 값(디버거의 인라인 값)
-      if (hot && r === model.lastRow[cur.line]) {
-        let val = cur.val;
-        const src = model.lines[cur.line], fi = Math.floor(t * 30);
-        if (cur.dayAt) val = `d = ${Math.max(1, Stage.dayAt(model.st, t))}`;
-        if (cur.loop) {
-          if (/const i = |const ch = |const line = |out\.put|for \(let x/.test(src)) val = `x = ${(fi * 7) % (opts.cols || 67)}, y = ${(fi * 3) % (opts.rows || 133)}`;
-          else if (/for \(let y/.test(src)) val = `y = ${(fi * 3) % (opts.rows || 133)}`;
-          else if (/mag\[i\]|dir\[i\]/.test(src)) val = `i = ${(fi * 541) % ((opts.cols || 67) * (opts.rows || 133))}`;
-          else if (/pane\.drawImage/.test(src)) val = `n = ${(opts.glyphs || 0).toLocaleString('en-US')}`;
-          else if (/out\.begin/.test(src)) val = `${opts.cols}×${opts.rows}`;
-        }
-        if (val) {
-          g.font = fontCode(14, 600); const vw = g.measureText(val).width + 14;
-          const vx = Math.min(B.codeX + ww + 12, L.cardX + L.cardW - vw - 10);
-          U.roundRect(g, vx - 4, y - 16, vw + 8, 23, 7); g.fillStyle = '#151a2a'; g.fill();          // 밑 글자를 가리는 바탕
+      const ww = drawTokens(g, row.tokens, B.codeX, y, B.font, (tk) => THEME[tk.type] || THEME.text, cur && row.line === cur.line ? 1 : 0.78);
+      // 줄 끝의 작은 값: 자리가 있을 때만(코드를 가리지 않게. 없으면 머리의 값으로 충분하다)
+      if (hot && val && r === model.lastRow[shown.line]) {
+        g.font = fontCode(14, 600); const vw = g.measureText(val).width + 14, vx = B.codeX + ww + 12;
+        if (vx + vw <= L.cardX + L.cardW - 10) {
           U.roundRect(g, vx, y - 15, vw, 21, 6);
-          g.fillStyle = cur.kind === 'error' ? 'rgba(255,107,125,0.3)' : (cur.kind === 'gold' ? 'rgba(255,212,121,0.3)' : 'rgba(143,140,255,0.3)'); g.fill();
-          g.fillStyle = cur.kind === 'error' ? '#ffb3bd' : (cur.kind === 'gold' ? '#ffe9a8' : '#c9c8ff'); g.fillText(val, vx + 7, y - 1);
+          g.fillStyle = shown.kind === 'error' ? 'rgba(255,107,125,0.3)' : (shown.kind === 'gold' ? 'rgba(255,212,121,0.3)' : 'rgba(143,140,255,0.3)'); g.fill();
+          g.fillStyle = shown.kind === 'error' ? '#ffb3bd' : (shown.kind === 'gold' ? '#ffe9a8' : '#c9c8ff'); g.fillText(val, vx + 7, y - 1);
         }
       }
     }

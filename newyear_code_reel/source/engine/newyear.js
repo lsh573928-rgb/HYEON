@@ -55,7 +55,7 @@ function newyear() {
 
   function ascii(img, env, out) {
     // 새해가 되면 칸이 작아진다(해상도 업)
-    const cell = env.year > env.year0 ? 5 : 8;
+    const cell = env.year > env.year0 ? 5 : env.cell;
     const cols = img.width / cell | 0;
     const rows = img.height / cell / 1.8 | 0;
     const px = shrink(img, cols, rows);
@@ -88,7 +88,7 @@ function newyear() {
       const l = (.21 * r + .72 * g + .07 * b)
         / 255;
       // 밤하늘은 비우고, 어두운 것도 보이게
-      luma[i] = Math.max(0, l - 0.1) ** 0.6;
+      luma[i] = Math.max(0, l - 0.14) ** 0.85;
     }
     // 글자는 칸의 일부만 칠하므로 색을 밝힌다
     const rgb = (i) => {

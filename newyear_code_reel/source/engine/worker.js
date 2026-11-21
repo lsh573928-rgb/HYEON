@@ -61,8 +61,8 @@
     const s = shovelPoints(pose);
     g.save(); g.globalAlpha *= alpha; g.lineCap = 'round'; g.lineJoin = 'round';
     // 자루
-    g.strokeStyle = C.woodDark; g.lineWidth = 8; g.beginPath(); g.moveTo(s.top.x, s.top.y); g.lineTo(s.neck.x, s.neck.y); g.stroke();
-    g.strokeStyle = C.wood; g.lineWidth = 5; g.beginPath(); g.moveTo(s.top.x, s.top.y); g.lineTo(s.neck.x, s.neck.y); g.stroke();
+    g.strokeStyle = C.woodDark; g.lineWidth = 12; g.beginPath(); g.moveTo(s.top.x, s.top.y); g.lineTo(s.neck.x, s.neck.y); g.stroke();
+    g.strokeStyle = C.wood; g.lineWidth = 8; g.beginPath(); g.moveTo(s.top.x, s.top.y); g.lineTo(s.neck.x, s.neck.y); g.stroke();
     // 손잡이(T자)
     g.strokeStyle = C.woodDark; g.lineWidth = 8;
     g.beginPath(); g.moveTo(s.top.x - s.uy * 9, s.top.y + s.ux * 9); g.lineTo(s.top.x + s.uy * 9, s.top.y - s.ux * 9); g.stroke();
@@ -71,7 +71,7 @@
     // 삽날
     g.save(); g.translate(s.neck.x, s.neck.y); g.rotate(Math.atan2(-s.uy, -s.ux) - Math.PI / 2);
     g.beginPath(); g.moveTo(-13, -3); g.lineTo(13, -3); g.lineTo(13, 12); g.quadraticCurveTo(11, 24, 0, 31); g.quadraticCurveTo(-11, 24, -13, 12); g.closePath();
-    const sg = g.createLinearGradient(-13, 0, 13, 0); sg.addColorStop(0, C.steelDark); sg.addColorStop(0.45, C.steel); sg.addColorStop(1, C.steelLight);
+    const sg = g.createLinearGradient(-13, 0, 13, 0); sg.addColorStop(0, '#c7d3ee'); sg.addColorStop(0.45, '#eef3ff'); sg.addColorStop(1, '#ffffff');
     g.fillStyle = sg; g.fill(); g.strokeStyle = C.line; g.lineWidth = 2.2; g.stroke();
     g.strokeStyle = 'rgba(20,24,51,0.35)'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 18); g.stroke();
     if (clod) {                                                    // 삽 위의 흙 한 덩이

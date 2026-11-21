@@ -136,7 +136,6 @@
         U.dot(g, b.x, b.y, R * 3.4, b.color, 0.4 * f, 0.08);
       }
       if (tau < 0.12) U.dot(g, b.x, b.y, R * 0.7, '#ffffff', 0.35 * (1 - tau / 0.12), 0.06);
-      if (tau < 1.6) U.dot(g, b.x, b.y + 30 * tau, R * 2.8, b.color, 0.12 * (1 - tau / 1.6), 0.05);
       for (let i = 0; i < n; i++) {
         const h1 = U.hash(b.seed * 977 + i, 1), h2 = U.hash(b.seed * 977 + i, 2), h3 = U.hash(b.seed * 977 + i, 3);
         let dx, dy, sp;
@@ -168,7 +167,6 @@
           prev = p;
         }
         U.dot(g, head.x, head.y, willow ? 17 : 21, tau < 0.2 ? '#ffffff' : col, a0, 0.32);
-        if (i % 2 === 0) U.dot(g, head.x, head.y, 52, col, a0 * 0.22, 0.05);          // 번지는 빛
       }
       // 터진 뒤 흩날리는 잔불
       if (tau > 0.5 && !willow) {

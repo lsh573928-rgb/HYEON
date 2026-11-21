@@ -30,8 +30,8 @@
   // ── 첫머리 되감기: 큰 동작만 차례로. 각 구간 [몫, 이야기 시각 a → b] ──
   const REW = (function () {
     const seg = [];
-    if (st.yearUp) seg.push([3, st.yearUp.lock + 0.25, st.yearUp.t - 0.02]);
-    if (st.gildT != null) seg.push([4, st.gildT + 12 * Stage.GILD_STEP + 0.26, st.gildT - 0.02]);
+    if (st.yearUp) seg.push([3, st.yearUp.lock + 1.45, st.yearUp.t - 0.02]);       // 해상도 업 고리가 다 퍼진 뒤부터 거꾸로
+    if (st.gildT != null) seg.push([4, Math.min(st.gildT + 12 * Stage.GILD_STEP + 0.26, st.yearUp ? st.yearUp.t - 0.03 : Infinity), st.gildT - 0.02]);
     if (st.dig) seg.push([5, st.dig.t + st.dig.D, st.dig.t]);
     if (st.spawn) seg.push([2, st.spawn.t + Stage.DROP + 0.08, st.spawn.t - 0.01]);
     if (st.yearSet) seg.push([2, st.yearSet.t + Stage.DROP + 0.1, Math.min(st.yearSet.t, firstFire) - 0.01]);
@@ -137,6 +137,10 @@
     }
   }
 
+  // 맨 끝 주석 줄(# 수고한 친구에게)은 무대에도 띄운다
+  const ctaLine = tl.lines.length && tl.lines[tl.lines.length - 1].fires[0] && tl.lines[tl.lines.length - 1].fires[0].silent && /^#/.test(tl.lines[tl.lines.length - 1].text.trim()) ? tl.lines[tl.lines.length - 1] : null;
+  const ctaText = ctaLine ? ctaLine.text.trim().replace(/^#\s*/, '') + ' →' : '';
+
   // ── 왼쪽: 무대를 그림판에 그리고 글자로 바꿔 찍는다 ──
   const scene = document.createElement('canvas'); scene.width = SPLIT; scene.height = H;
   const sg = scene.getContext('2d');
@@ -144,7 +148,8 @@
   const out = NY.writer(g, '"JetBrains Mono", monospace');
   const y0 = st.yearSet ? st.yearSet.v : undefined;
   const yNew = st.yearUp ? y0 + st.yearUp.by : y0;
-  const RING = { x: Stage.CX, y: Stage.BOARD.cy, r: 1500 };
+  const RING = { x: Stage.CX, y: Stage.BOARD.cy, r: 1400 };
+  const CELL = 8, LENS = 6;                                 // 보통 칸, 2027 전 삽질러 둘레 칸(주인공이 보이게)
   const RAW = /[?&]ascii=0/.test(location.search);
   function drawLeft(t, rw, Tv) {
     sg.setTransform(1, 0, 0, 1, 0, 0); sg.globalAlpha = 1; sg.globalCompositeOperation = 'source-over';
@@ -152,22 +157,33 @@
     const res = Stage.drawScene(sg, t, st, { rewind: rw, snowT: rw ? rewindSnowT(Tv, t) : null });
     g.fillStyle = '#030408'; g.fillRect(0, 0, SPLIT, H);
     // 새해가 '철컥' 잠기면 연도판에서 고리가 퍼지며 고리 안쪽부터 칸이 작아진다(해상도 업)
-    const reveal = st.yearUp ? U.easeOutCubic(U.prog(t - st.yearUp.lock, 0, 0.8)) : 0;
+    const reveal = st.yearUp ? U.easeInOutCubic(U.prog(t - st.yearUp.lock, 0, 1.4)) : 0;
     const info = { cols: 0, rows: 0, glyphs: 0 };
-    const run = (year) => {
-      const n = NY.ascii(scene, { year, year0: y0 }, out);
-      const cell = year > y0 ? 5 : 8;
-      info.cols = SPLIT / cell | 0; info.rows = H / cell / 1.8 | 0; info.glyphs = n;
+    const run = (year, cell, main) => {
+      const n = NY.ascii(scene, { year, year0: y0, cell }, out);
+      if (main) { const c = year > y0 ? 5 : cell; info.cols = SPLIT / c | 0; info.rows = H / c / 1.8 | 0; }
+      info.glyphs += n;
     };
     if (RAW) { g.drawImage(scene, 0, 0); Stage.drawOverlay(g, t, st, { rewind: rw }); return Object.assign(info, res); }   // ?ascii=0: 글자로 바꾸기 전 그림(비교용)
-    if (reveal < 1) run(y0);
+    if (reveal < 1) {
+      run(y0, CELL, true);
+      // 삽질러 둘레만 칸을 조금 작게(8px 칸에서는 안전모·삽이 뭉개진다)
+      const ws = Stage.workerState(t, st);
+      if (ws) {
+        const k = Stage.LAYOUT.WORKER_SCALE;
+        g.save(); g.beginPath(); g.ellipse(ws.x + 10, ws.y - 70 * k, 74 * k, 92 * k, 0, 0, Math.PI * 2); g.clip();
+        g.fillStyle = '#030408'; g.fillRect(0, 0, SPLIT, H);
+        run(y0, LENS, false);
+        g.restore();
+      }
+    }
     if (reveal > 0) {
       g.save(); g.beginPath(); g.arc(RING.x, RING.y, reveal * RING.r, 0, Math.PI * 2); g.clip();
       g.fillStyle = '#030408'; g.fillRect(0, 0, SPLIT, H);
-      run(yNew);
+      run(yNew, CELL, reveal >= 1);
       g.restore();
     }
-    Stage.drawOverlay(g, t, st, { rewind: rw });
+    Stage.drawOverlay(g, t, st, { rewind: rw, cta: ctaLine && t >= ctaLine.fireAt ? { t: ctaLine.fireAt, text: ctaText } : null });
     if (reveal > 0 && reveal < 1) {                           // 퍼져 나가는 고리
       g.save(); g.beginPath(); g.rect(0, 0, SPLIT, H); g.clip(); g.globalCompositeOperation = 'lighter';
       const f = 1 - reveal;
