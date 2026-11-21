@@ -109,7 +109,7 @@
   function prepare(tl, st, src, Stage, cold) {
     const lines = src.split('\n');
     const tokens = tokenizeJS(lines);
-    const maxCells = Math.floor((L.cardX + L.cardW - 4 - L.B.codeX) / monoW(L.B.font));
+    const maxCells = Math.floor((930 - L.B.codeX) / monoW(L.B.font));   // x 940 오른쪽은 인스타 좋아요·댓글 단추 자리
     const rows = wrapRows(lines, tokens, maxCells);
     const firstRow = [], lastRow = [];
     rows.forEach((r, i) => { if (r.first) firstRow[r.line] = i; lastRow[r.line] = i; });
@@ -199,10 +199,12 @@
     const tEnd = Math.max(tl.scriptEnd + 4, 20);
     let k = 0;
     let idleFrom = null;
+    const lastFireT = Math.max(...tl.fires.filter(f => !f.silent).map(f => f.t), 0) + 2.0;
     for (let i = 0; i * 0.1 < tEnd; i++) {
       const t = i * 0.1;
       if (isBusy(t)) { k = 0; idleFrom = null; continue; }
       if (idleFrom == null) idleFrom = t;
+      if (t > lastFireT + 1.0) continue;                     // 대본이 다 돈 뒤에는 막대가 마지막 자리에 머문다
       if (nextBusy(idleFrom) - idleFrom < 0.8) continue;
       S(t, cycle[k % cycle.length], 'run', null, { loop: true }); k++;
     }
@@ -239,7 +241,7 @@
     const lastRun = tl.fires.filter(f => !f.silent).pop();
     const errors = tl.fires.filter(f => !f.ok).length;
     const waste = st.dig ? (st.gildT != null ? 0 : st.dig.labeled) : 0;
-    const runEnd = Math.max(...busy.map(b => b[1]), lastRun ? lastRun.t + 1.0 : 0) - 0.4;
+    const runEnd = Math.max(...doneT.filter(v => v != null), lastRun ? lastRun.t : 0) + 0.3;
     const status = lastRun ? { t: runEnd, text: `= 오류 ${errors}건 · 헛삽질 ${waste}건` } : null;
     if (status) term.push({ t: status.t, text: status.text, color: THEME.gold, bold: true });
     term.sort((a, b) => a.t - b.t);
@@ -399,9 +401,13 @@
     const moving = cur && prev && cur.scroll !== prev.scroll;
     const shown = moving && k < 0.5 ? prev : cur;
     const w = tabPill(g, L.cardX + 16, hy, 'newyear.js', 18);
-    if (shown) crumb(g, L.cardX + 16 + w + 10, hy, model.owner[shown.line]);
-    // 머리 오른쪽: 지금 값(전화에서도 읽히는 크기)
+    // 머리 오른쪽: 지금 값(전화에서도 읽히는 크기). 함수 이름은 값 앞에서 잘라 겹치지 않게
     const val = valueOf(model, shown, t, opts);
+    g.font = fontCode(21, 800); const valX = val ? L.cardX + L.cardW - 16 - g.measureText(val).width : L.cardX + L.cardW;
+    if (shown) {
+      g.save(); g.beginPath(); g.rect(L.cardX, B.y, valX - 26 - L.cardX, B.head); g.clip();
+      crumb(g, L.cardX + 16 + w + 10, hy, model.owner[shown.line]); g.restore();
+    }
     if (val) {
       const col = shown.kind === 'error' ? THEME.error : (shown.kind === 'gold' ? THEME.gold : (shown.kind === 'ok' ? THEME.ok : '#b9b7ff'));
       g.font = fontCode(21, 800); g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillStyle = col;
@@ -430,7 +436,7 @@
       // 줄 끝의 작은 값: 자리가 있을 때만(코드를 가리지 않게. 없으면 머리의 값으로 충분하다)
       if (hot && val && r === model.lastRow[shown.line]) {
         g.font = fontCode(14, 600); const vw = g.measureText(val).width + 14, vx = B.codeX + ww + 12;
-        if (vx + vw <= L.cardX + L.cardW - 10) {
+        if (vx + vw <= 930) {                                // 인스타 단추 자리(x 940~)는 비운다
           U.roundRect(g, vx, y - 15, vw, 21, 6);
           g.fillStyle = shown.kind === 'error' ? 'rgba(255,107,125,0.3)' : (shown.kind === 'gold' ? 'rgba(255,212,121,0.3)' : 'rgba(143,140,255,0.3)'); g.fill();
           g.fillStyle = shown.kind === 'error' ? '#ffb3bd' : (shown.kind === 'gold' ? '#ffe9a8' : '#c9c8ff'); g.fillText(val, vx + 7, y - 1);
