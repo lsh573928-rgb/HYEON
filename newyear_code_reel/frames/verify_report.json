@@ -1,0 +1,554 @@
+{
+  "file": "newyear_code_reel_silent.mp4",
+  "events": "source/build/events.json",
+  "script": [
+    "year = 2026",
+    "me = 삽질러()",
+    "snow.fall(300)",
+    "me.삽질(365)",
+    "countdown(3)",
+    "year += 1",
+    "say(\"수고했어\")",
+    "year += 1",
+    "fireworks(12)",
+    "# 친구에게 보내기"
+  ],
+  "video": {
+    "codec_name": "h264",
+    "profile": "High",
+    "codec_type": "video",
+    "width": 1080,
+    "height": 1920,
+    "pix_fmt": "yuv420p",
+    "color_range": "tv",
+    "color_space": "bt709",
+    "color_transfer": "bt709",
+    "color_primaries": "bt709",
+    "r_frame_rate": "30/1",
+    "avg_frame_rate": "30/1",
+    "duration": "16.000000",
+    "nb_read_frames": "480",
+    "format": {
+      "duration": "16.000000",
+      "size": "10492906"
+    }
+  },
+  "audio": null,
+  "frames": {
+    "first": 0,
+    "first3": 3,
+    "first6": 6,
+    "last": 479,
+    "last1": 478,
+    "last3": 476,
+    "last6": 473,
+    "mid": 240,
+    "mid1": 241,
+    "ice": 347,
+    "gold": 378,
+    "jam_before": 261,
+    "jam_after_a": 278,
+    "jam_after_b": 279,
+    "jam_after_c": 280,
+    "dug": 210,
+    "soil": 327,
+    "gilded": 375,
+    "head_ref": 326,
+    "head_before": 347,
+    "head_after": 380,
+    "typed0": 42,
+    "typed1": 72,
+    "typed2": 110,
+    "typed3": 147,
+    "typed4": 215,
+    "typed5": 267,
+    "typed6": 305,
+    "typed7": 348,
+    "typed8": 380,
+    "typed9": 463
+  },
+  "limits": {
+    "board_ice": -10.0,
+    "board_gold": 30.0,
+    "jam_red": 15.0,
+    "mound_px": 6,
+    "mark_px": 30,
+    "mark_tint": 12,
+    "head_change": 0.02,
+    "loop_ratio": 2.0,
+    "loop_floor": 0.5,
+    "loop_block_floor": 5.0,
+    "fresh_block": 12.0,
+    "bright": 90,
+    "solid": 160,
+    "solid_run": 20,
+    "card_margin": 16,
+    "lufs": [
+      -16.0,
+      -12.0
+    ],
+    "true_peak": -1.0,
+    "silence_db": 15.0
+  },
+  "checks": [
+    {
+      "group": "A",
+      "name": "영상 코덱",
+      "ok": true,
+      "measured": "h264 High · yuv420p"
+    },
+    {
+      "group": "A",
+      "name": "화면 크기",
+      "ok": true,
+      "measured": "1080x1920"
+    },
+    {
+      "group": "A",
+      "name": "프레임 속도",
+      "ok": true,
+      "measured": "30/1 (평균 30/1)"
+    },
+    {
+      "group": "A",
+      "name": "프레임 수",
+      "ok": true,
+      "measured": "480장 (시각표 480장)"
+    },
+    {
+      "group": "A",
+      "name": "길이",
+      "ok": true,
+      "measured": "16.000초 (기대 16.000±0.02)"
+    },
+    {
+      "group": "A",
+      "name": "색 꼬리표",
+      "ok": true,
+      "measured": "bt709 / bt709 / bt709 · 범위 tv"
+    },
+    {
+      "group": "A",
+      "name": "faststart",
+      "ok": true,
+      "measured": "상자 순서 ftyp → moov → free → mdat"
+    },
+    {
+      "group": "A",
+      "name": "소리 규격",
+      "ok": null,
+      "measured": "소리 줄기 없음(무음 영상)"
+    },
+    {
+      "group": "B",
+      "name": "연도판 색",
+      "ok": true,
+      "measured": "넘어가기 전 R−B -44.9 (얼음빛 < -10.0) → 뒤 +104.7 (금빛 > 30.0)",
+      "ice": -44.86635714285714,
+      "gold": 104.70239285714285
+    },
+    {
+      "group": "B",
+      "name": "연도판 걸림",
+      "ok": true,
+      "measured": "붉은 정도 -27.1 → +11.7 (늘어난 양 +38.8, 기준 ≥ 15.0)",
+      "before": -27.075285714285712,
+      "after": 11.689750000000004
+    },
+    {
+      "group": "B",
+      "name": "흙더미 높이",
+      "ok": true,
+      "measured": "윗변 y=1021 (기대 1020.0±6, 삽질 365번)",
+      "top": 1021,
+      "want": 1020
+    },
+    {
+      "group": "B",
+      "name": "흙더미 색",
+      "ok": true,
+      "measured": "바뀌기 전 흙 12/12띠 → 1.5초 뒤 금 12/12띠",
+      "before": [
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙"
+      ],
+      "after": [
+        "금",
+        "금",
+        "금",
+        "금",
+        "금",
+        "금",
+        "금",
+        "금",
+        "금",
+        "금",
+        "금",
+        "금"
+      ]
+    },
+    {
+      "group": "B",
+      "name": "편집기 실행 표시",
+      "ok": true,
+      "measured": "✓ 8줄 · ✕ 1줄 · 표시 없음 1줄",
+      "marks": [
+        {
+          "line": 1,
+          "text": "year = 2026",
+          "row": 0,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 2,
+          "text": "me = 삽질러()",
+          "row": 1,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 3,
+          "text": "snow.fall(300)",
+          "row": 2,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 4,
+          "text": "me.삽질(365)",
+          "row": 3,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 5,
+          "text": "countdown(3)",
+          "row": 4,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 6,
+          "text": "year += 1",
+          "row": 5,
+          "want": "error",
+          "seen": "error"
+        },
+        {
+          "line": 7,
+          "text": "say(\"수고했어\")",
+          "row": 7,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 8,
+          "text": "year += 1",
+          "row": 8,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 9,
+          "text": "fireworks(12)",
+          "row": 9,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 10,
+          "text": "# 친구에게 보내기",
+          "row": 10,
+          "want": null,
+          "seen": null
+        }
+      ]
+    },
+    {
+      "group": "B",
+      "name": "오류 줄",
+      "ok": true,
+      "measured": "실패한 줄 1개 · 빨간 막대가 보이는 칸 [6] (기대 [6])",
+      "bars_seen": [
+        6
+      ],
+      "bars_want": [
+        6
+      ]
+    },
+    {
+      "group": "B",
+      "name": "제목 교체",
+      "ok": true,
+      "measured": "제목 띠에서 달라진 화소 11.7% (기준 ≥ 2%, 바꾸기 전 0.7초 동안은 0.0%)",
+      "changed": 0.11708197167755992,
+      "before_swap": 0.0
+    },
+    {
+      "group": "C",
+      "name": "마지막 → 첫 프레임",
+      "ok": true,
+      "measured": "평균 차이 3.24 (기준 ≤ 5.55) · 가장 큰 120px 칸 20.6 (기준 ≤ 44.3) — 기준은 바로 앞 이웃 프레임 478→479의 2.53 · 19.6 × 2.0 + 여유, 영상 가운데 이웃 프레임은 2.51 · 68.7 (제목 띠 y 243~515 제외)",
+      "seam": 3.2388160358983584,
+      "seam_block": 20.56238425925926,
+      "near": 2.525991287606377,
+      "near_block": 19.62578703703704,
+      "middle": 2.5149264353350116,
+      "middle_block": 68.69675925925925,
+      "limit": 5.551982575212754,
+      "limit_block": 44.25157407407408
+    },
+    {
+      "group": "D",
+      "name": "두 번 그리기",
+      "ok": true,
+      "measured": "프레임 479을 따로 두 번 그려 다른 화소 0개",
+      "different_pixels": 0
+    },
+    {
+      "group": "D",
+      "name": "시각표가 지금 소스와 같음",
+      "ok": true,
+      "measured": "build/events.json = 지금 엔진이 내보내는 시각표",
+      "stale_keys": []
+    },
+    {
+      "group": "D",
+      "name": "영상이 지금 소스와 같음",
+      "ok": true,
+      "measured": "프레임 479: 지금 그린 화면과 MP4의 차이 — 평균 1.78, 가장 큰 120px 칸 3.9 (기준 ≤ 12.0, 압축 손실만 있어야 한다)",
+      "mad": 1.7764051247427983,
+      "block": 3.9050462962962955
+    },
+    {
+      "group": "E",
+      "name": "삽질 수 → 시각표",
+      "ok": true,
+      "measured": "'me.삽질(100)' → 높이 120.55px (기대 100/365 × 440 = 120.55)",
+      "h": 120.54794520547945,
+      "want": 120.54794520547945
+    },
+    {
+      "group": "E",
+      "name": "흙더미 높이",
+      "ok": true,
+      "measured": "윗변 y=1341 (기대 1339.5±6, 삽질 100번)",
+      "top": 1341,
+      "want": 1339.4520547945206
+    },
+    {
+      "group": "E",
+      "name": "수고했어 삭제 → 시각표",
+      "ok": true,
+      "measured": "success=False · 실패한 줄 2개 (기대 2개)",
+      "failed": 2,
+      "want": 2
+    },
+    {
+      "group": "E",
+      "name": "연도판 색",
+      "ok": true,
+      "measured": "새해로 넘어가지 않음 → 끝까지 얼음빛 R−B -45.5 (기준 < -10.0)",
+      "ice": -45.51925
+    },
+    {
+      "group": "E",
+      "name": "흙더미 색",
+      "ok": true,
+      "measured": "금빛으로 바뀌지 않음 → 끝까지 흙 12/12띠",
+      "before": [
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙",
+        "흙"
+      ]
+    },
+    {
+      "group": "E",
+      "name": "편집기 실행 표시",
+      "ok": true,
+      "measured": "✓ 6줄 · ✕ 2줄 · 표시 없음 1줄",
+      "marks": [
+        {
+          "line": 1,
+          "text": "year = 2026",
+          "row": 0,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 2,
+          "text": "me = 삽질러()",
+          "row": 1,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 3,
+          "text": "snow.fall(300)",
+          "row": 2,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 4,
+          "text": "me.삽질(365)",
+          "row": 3,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 5,
+          "text": "countdown(3)",
+          "row": 4,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 6,
+          "text": "year += 1",
+          "row": 5,
+          "want": "error",
+          "seen": "error"
+        },
+        {
+          "line": 7,
+          "text": "year += 1",
+          "row": 7,
+          "want": "error",
+          "seen": "error"
+        },
+        {
+          "line": 8,
+          "text": "fireworks(12)",
+          "row": 9,
+          "want": "ok",
+          "seen": "ok"
+        },
+        {
+          "line": 9,
+          "text": "# 친구에게 보내기",
+          "row": 10,
+          "want": null,
+          "seen": null
+        }
+      ]
+    },
+    {
+      "group": "E",
+      "name": "오류 줄",
+      "ok": true,
+      "measured": "실패한 줄 2개 · 빨간 막대가 보이는 칸 [6, 8] (기대 [6, 8])",
+      "bars_seen": [
+        6,
+        8
+      ],
+      "bars_want": [
+        6,
+        8
+      ]
+    },
+    {
+      "group": "E",
+      "name": "없는 이름",
+      "ok": true,
+      "measured": "'tree.grow(7)' → NameError: name 'tree' is not defined · 마지막 프레임 그려짐",
+      "error": {
+        "type": "NameError",
+        "message": "name 'tree' is not defined"
+      }
+    },
+    {
+      "group": "F",
+      "name": "코드 글자 오른쪽 끝",
+      "ok": true,
+      "measured": "가장 긴 줄은 3번째 'snow.fall(300)' (프레임 110, 끝 x=933) · 창 안 글자 전체의 끝 x=937 (8번째 줄을 다 친 프레임) · 창 오른쪽 끝 1064까지 127px (기준 ≥ 16)",
+      "longest_line": "snow.fall(300)",
+      "longest_end": 933,
+      "text_end": 937,
+      "card_right": 1064
+    },
+    {
+      "group": "F",
+      "name": "앱 단추 자리",
+      "ok": true,
+      "measured": "y 1000~1700에서 밝은 글자가 닿는 가장 오른쪽 x=931 (10번째 줄을 다 친 프레임, 기준 ≤ 940)",
+      "rightmost": 931
+    },
+    {
+      "group": "F",
+      "name": "맨 위 구역(배치)",
+      "ok": true,
+      "measured": "가장 높이 놓인 요소는 제목 윗변 y=296 (기준 ≥ 220)",
+      "tops": {
+        "제목 윗변": 296.0,
+        "코드 창 윗변": 472,
+        "연도판 윗변": 504.0
+      }
+    },
+    {
+      "group": "F",
+      "name": "맨 위 구역(화면)",
+      "ok": true,
+      "measured": "y<220에서 가장 밝은 것은 끝 장면 (180,219) 밝기 240 · 가만히 있는 밝은 것의 가장 긴 가로 줄 6px (433,211) 끝 장면 (기준 ≤ 20px — 별은 통과, 글자·판이면 걸린다)",
+      "zones": [
+        {
+          "shot": "첫 장면",
+          "still_run": 4,
+          "still_x": 360,
+          "still_y": 129,
+          "peak": 233.9078,
+          "peak_x": 195,
+          "peak_y": 191
+        },
+        {
+          "shot": "끝 장면",
+          "still_run": 6,
+          "still_x": 433,
+          "still_y": 211,
+          "peak": 239.8544,
+          "peak_x": 180,
+          "peak_y": 219
+        }
+      ]
+    },
+    {
+      "group": "G",
+      "name": "음량·침묵 구간",
+      "ok": null,
+      "measured": "소리 줄기 없음(무음 영상)"
+    }
+  ],
+  "images": [
+    "rep_1_hook.png",
+    "rep_2_board.png",
+    "rep_3_worker.png",
+    "rep_4_dig.png",
+    "rep_5_jam.png",
+    "rep_6_thanks.png",
+    "rep_7_newyear.png",
+    "rep_8_final.png",
+    "representative_sheet.png",
+    "loop_check.png"
+  ],
+  "all_ok": true
+}

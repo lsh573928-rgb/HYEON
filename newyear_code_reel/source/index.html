@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>새해 코드 릴스</title>
+<style>
+@font-face { font-family: "Pretendard"; font-weight: 500; src: url("fonts/Pretendard-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Pretendard"; font-weight: 700; src: url("fonts/Pretendard-Bold.woff2") format("woff2"); }
+@font-face { font-family: "Pretendard"; font-weight: 800; src: url("fonts/Pretendard-ExtraBold.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; src: url("fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 700; src: url("fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 800; src: url("fonts/jetbrains-mono-latin-800-normal.woff2") format("woff2"); }
+@font-face { font-family: "Black Han Sans"; font-weight: 400; src: url("fonts/BlackHanSans-Regular.ttf") format("truetype"); }
+html, body { margin: 0; height: 100%; background: #05060f; overflow: hidden; }
+body.live { display: flex; align-items: center; justify-content: center; }
+canvas { display: block; }
+body.live canvas { height: 100vh; width: auto; max-width: 100vw; object-fit: contain; cursor: pointer; }
+#hud { position: fixed; left: 12px; bottom: 10px; color: #8892b0; font: 13px/1.4 "Pretendard", sans-serif; user-select: none; }
+body:not(.live) #hud { display: none; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<div id="hud"></div>
+<script src="engine/util.js"></script>
+<script src="engine/interp.js"></script>
+<script src="engine/timeline.js"></script>
+<script src="engine/fx.js"></script>
+<script src="engine/editor.js"></script>
+<script src="engine/worker.js"></script>
+<script src="engine/stage.js"></script>
+<script src="script.js"></script>
+<script src="timing.js"></script>
+<script src="copy.js"></script>
+<script src="engine/main.js"></script>
+</body>
+</html>
