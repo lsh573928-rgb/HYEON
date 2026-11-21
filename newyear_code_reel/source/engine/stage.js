@@ -1,5 +1,6 @@
 /* 왼쪽 무대 — 대본 한 줄이 실행될 때마다 그 값대로 장면이 한 겹씩 생긴다.
-   REGISTRY에 적힌 이름이 대본에서 부를 수 있는 전부다(없는 이름은 NameError).
+   대본이 부르는 이름이 실제로 하는 일은 engine/newyear.js의 C에 있다(화면 가운데 창에 뜨는 그 코드).
+   여기 META는 그 이름마다 값의 범위, 한 줄 설명, 빛이 날아갈 자리만 적는다. 없는 이름은 NameError.
    줄거리: 올해(2026) 삽질 365번이 12달치 흙더미로 쌓인다 → 새해로 넘기려니 오류("수고했어" 누락)
           → 수고했어 한마디에 흙더미가 금빛으로 → 2027 → 불꽃. */
 'use strict';
@@ -7,7 +8,7 @@
   const U = window.U, Fx = window.Fx, Worker = window.Worker;
   const W = 540, H = 1920, CX = 270, TAU = Math.PI * 2;
   const GROUND = 1460;                                   // 흙더미 바닥선(이 아래는 앱의 계정 이름·자막이 얹히는 자리)
-  const BANDS = 12, FULL_H = 440, BAND_H = FULL_H / BANDS; // 12달 = 440px(달마다 날 수만큼)
+  const BANDS = 12, FULL_H = 410, BAND_H = FULL_H / BANDS; // 12달 = 410px(달마다 날 수만큼)
   const BASE_HALF = 210, TOP_HALF = 96;
   const YEAR_DAYS = 365;
   const BOARD = { cy: 570, cw: 92, ch: 132, gap: 8 };
@@ -18,7 +19,7 @@
   const GILD_STEP = 0.0625;                              // 금빛이 한 달 올라가는 간격
   const DROP = 0.25;                                     // 연도판·삽질러가 떨어져 내려앉는 시간
   const COUNT_Y = 760;
-  const WORKER_SCALE = 1.32;
+  const WORKER_SCALE = 1.5;
   const MONTH_NOTES = ['계획', '시작', '어라?', '다시', '또다시', '수정', '재수정', '최종', '진짜최종', '찐최종', '마무리', '완성'];
   const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   // 달마다 날 수만큼 두껍다(2월이 가장 얇다). BAND_TOP[k] = k번째 달이 끝나는 높이(px)
@@ -31,102 +32,87 @@
   const GOLD = ['#f3b63a', '#ffd15e'];
 
   let REWIND = false;                                    // 되감는 중인지(draw가 켠다)
-  // 글자 세상 스위치: 주소에 ?typed=1(켬)/?typed=0(끔)이 있으면 그대로, 없으면 TYPED_DEFAULT
-  const TYPED_DEFAULT = true;
-  const TYPED = /[?&]typed=1/.test(location.search) ? true : (/[?&]typed=0/.test(location.search) ? false : (window.TYPED_WORLD != null ? !!window.TYPED_WORLD : TYPED_DEFAULT));
-  function pyErr(type, msg) { const e = new Error(msg); e.pyType = type; return e; }
-  function needNumber(v, name, lo, hi, msg) {
-    if (typeof v !== 'number' || !isFinite(v)) throw pyErr('TypeError', `${name}에는 숫자가 필요합니다`);
-    if (v < lo || v > hi) throw pyErr('ValueError', msg || `${name}은(는) ${lo}~${hi}`);
-  }
-
-  /* 대본에서 부를 수 있는 것들.
-     target: 코드 줄에서 날아온 빛이 닿는 자리, color: 그 빛의 색, log: 코드 아래 한 줄 설명, instant: 빛 없이 바로 반응 */
-  const REGISTRY = {
+  /* 이름마다: args = 값 검사([이름, 최소, 최대, 넘었을 때 말] 또는 [이름, 'string']),
+     log = 터미널에 찍을 한 줄, target = 대본 줄에서 날아온 빛이 닿는 자리, instant = 빛 없이 바로 */
+  const META = {
     'year =': {
-      check(a) { needNumber(a[0], 'year', 1000, 9998); },
-      apply(a, k, env) { env.year = a[0]; },
-      log(a) { return `올해는 ${a[0]}년`; },
+      args: [['year', 1000, 9998]],
+      log: (a) => `올해는 ${a[0]}년`,
       target: () => ({ x: CX, y: BOARD.cy }), color: '#bcd4ff',
     },
     'snow.fall': {
-      check(a) { needNumber(a[0], '눈', 0, 1500); },
-      log(a) { return `눈 ${a[0]}송이`; },
+      args: [['눈', 0, 1500]],
+      log: (a) => `눈 ${a[0]}송이`,
       target: () => ({ x: 400, y: 250 }), color: '#eaf2ff',
     },
     '= 삽질러': {
-      check(a) { if (a.length) throw pyErr('TypeError', '삽질러()는 값을 받지 않습니다'); },
-      make() { return { type: '삽질러' }; },
-      log() { return '삽질러 등장'; },
+      args: [],
+      log: () => '삽질러 등장',
       target: () => ({ x: CX, y: GROUND - 70 }), color: '#ffc93c',
     },
     '삽질러.삽질': {
-      check(a, k, env) {
-        needNumber(a[0], '삽질', 1, YEAR_DAYS, '1년은 365일입니다');
-        if (env.dug) throw pyErr('ValueError', '올해 삽질은 이미 끝났습니다');
-      },
-      apply(a, k, env) { env.dug = a[0]; },
-      log(a) { return `삽질 ${a[0]}번 = ${a[0]}일`; },
-      target: (st) => ({ x: CX, y: GROUND - 90 }), color: '#ffb347',
+      args: [['삽질', 1, 100000]],                         // 1년 365일 검사는 newyear.js가 한다
+      log: (a) => `삽질 ${a[0]}번 = ${a[0]}일`,
+      target: () => ({ x: CX, y: GROUND - 90 }), color: '#ffb347',
     },
     'countdown': {
-      check(a) { needNumber(a[0], '카운트', 1, 5); },
-      log(a) { return Array.from({ length: a[0] }, (_, i) => a[0] - i).join(' · '); },
+      args: [['카운트', 1, 5]],
+      log: (a) => Array.from({ length: a[0] }, (_, i) => a[0] - i).join(' · '),
       target: () => ({ x: CX, y: COUNT_Y }), color: '#ffffff',
     },
     'year +=': {
-      // 이 영상의 규칙: "수고했어" 한마디 없이는 새해로 못 넘어간다.
-      check(a, k, env) {
-        if (env.year == null) throw pyErr('NameError', "name 'year' is not defined");
-        needNumber(a[0], '더할 값', 1, 1, '한 해씩만 넘어갑니다');
-        if (!env.thanked) throw pyErr('Error', '"수고했어" 누락');
-      },
-      apply(a, k, env) { env.year += a[0]; },
-      log(a, k, env) { return `${env.year}년 도착`; },
+      args: [['더할 값', 1, 1, '한 해씩만 넘어갑니다']],
+      log: (a, env) => `${env.year}년 도착`,
       instant: true, target: () => ({ x: CX, y: BOARD.cy }), color: '#ffd479',
     },
     'say': {
-      check(a) { if (typeof a[0] !== 'string' || !a[0]) throw pyErr('TypeError', '할 말을 따옴표로 적어 주세요'); },
-      apply(a, k, env) { if (a[0].indexOf('수고') >= 0) env.thanked = true; },
-      log(a) { return `"${a[0]}" 한마디`; },
+      args: [['할 말', 'string']],
+      log: (a) => `"${a[0]}" 한마디`,
       target: (st) => ({ x: CX + 120, y: GROUND - (st.dig ? st.dig.h : 0) - 137 * WORKER_SCALE - 66 }), color: '#ffe9a8',
     },
     'fireworks': {
-      check(a) { needNumber(a[0], '불꽃', 1, 60); },
-      log(a) { return a[0] === 12 ? '불꽃 12발 · 열두 달' : `불꽃 ${a[0]}발`; },
+      args: [['불꽃', 1, 60]],
+      log: (a) => a[0] === 12 ? '불꽃 12발 · 열두 달' : `불꽃 ${a[0]}발`,
       target: () => ({ x: CX, y: GROUND - 16 }), color: '#ff9ac8',
     },
   };
+  // 타임라인에 넘기는 표: 이름 → { fn(실제로 하는 일), 검사·설명·자리 }
+  const NY = window.NEWYEAR();
+  const REGISTRY = {};
+  for (const key of Object.keys(META)) REGISTRY[key] = Object.assign({ fn: NY.C[key.replace(/^say$/, 'say')] }, META[key]);
 
   // ───────────── 실행된 줄 → 무대 상태 ─────────────
   function collect(tl) {
     const st = { yearSet: null, yearFail: null, yearUp: null, snow: null, spawn: null, dig: null, count: null, say: null, fw: null, bursts: [], sfx: [] };
+    let daysBefore = 0;
     for (const f of tl.fires) {
       if (f.silent) continue;
       const key = f.ok ? f.key : f.tryKey;
       const entry = REGISTRY[key];
       if (!entry) continue;
       const t = f.t + (entry.instant ? 0 : COURIER);
-      if (!f.ok) { if (key === 'year +=' && !st.yearFail) st.yearFail = { t, message: f.error.message }; continue; }
-      const a = f.args;
-      if (key === 'year =') st.yearSet = { t, v: a[0] };
-      else if (key === 'snow.fall') st.snow = { t, n: a[0] };
-      else if (key === '= 삽질러') st.spawn = { t };
+      if (!f.ok) { if (key === 'year +=' && !st.yearFail) st.yearFail = { t, fireT: f.t, message: f.error.message }; continue; }
+      const a = f.args, env = f.env;                      // env: 그 줄을 실행한 직후의 상태(newyear.js가 바꾼 값)
+      if (key === 'year =') st.yearSet = { t, fireT: f.t, v: env.year };
+      else if (key === 'snow.fall') st.snow = { t, fireT: f.t, n: env.snow };
+      else if (key === '= 삽질러') st.spawn = { t, fireT: f.t };
       else if (key === '삽질러.삽질') {
-        const n = Math.round(a[0]);
-        st.dig = { t, n, D: digDuration(n), h: n / YEAR_DAYS * FULL_H };
+        const n = env.days - daysBefore; daysBefore = env.days;   // 이번에 더해진 날 수
+        st.dig = { t, fireT: f.t, n, D: digDuration(n), h: env.days / YEAR_DAYS * FULL_H };
       }
-      else if (key === 'countdown') st.count = { t, n: Math.round(a[0]) };
-      else if (key === 'year +=') st.yearUp = { t, by: a[0], lock: t + ROLL };
-      else if (key === 'say') st.say = { t, fireT: f.t, text: String(a[0]), thanked: String(a[0]).indexOf('수고') >= 0 };
-      else if (key === 'fireworks') st.fw = { t, n: Math.round(a[0]) };
+      else if (key === 'countdown') st.count = { t, fireT: f.t, n: env.beats.length };
+      else if (key === 'year +=') st.yearUp = { t, fireT: f.t, by: env.year - env.year0, lock: t + ROLL };
+      else if (key === 'say') st.say = { t, fireT: f.t, text: String(a[0]), thanked: env.thanked };
+      else if (key === 'fireworks') st.fw = { t, fireT: f.t, n: env.shells.length, months: env.shells };
     }
     if (st.dig) prepareDig(st);
-    if (st.fw) st.bursts = planFireworks(st, st.fw.t, st.fw.n);
+    if (st.fw) st.bursts = planFireworks(st, st.fw.t, st.fw.n, st.fw.months);
     // 금빛은 말풍선이 뜨고 한 박 뒤부터 차오른다
     st.gildT = st.say && st.say.thanked && st.dig ? st.say.t + 0.5 : null;
     return st;
   }
+  // 삽질하는 동안 지금 며칠째인지(코드 창의 d 값과 같은 수)
+  function dayAt(st, t) { return st.dig ? Math.round(digCountAt(st.dig, t - st.dig.t)) : 0; }
 
   // ───────────── 삽질: 몇 번째 삽인지 / 어디까지 쌓였는지 ─────────────
   // 삽질 시작 뒤 tau초에 몇 번째 삽인지: 달이 닫히는 박자(DIG_GRID)마다 그 달 말일에 닿도록 곧게 잇는다
@@ -173,7 +159,7 @@
   const FW_COLORS = [['#ffd76a', '#fff3d1'], ['#ff7f9f', '#ffd1e6'], ['#7ce8ff', '#e0fbff'], ['#b89bff', '#efe6ff'], ['#7cf0a4', '#e3ffe9'], ['#ffa46b', '#ffe3c2'], ['#ffffff', '#ffd76a']];
   /* n발. 한 발씩 차례로 그 달의 흙띠 옆구리에서 솟는다(12발이면 달마다 한 발).
      작은 꽃들이 양옆에서 16분음표 간격으로 → 금빛 버들 네 발이 높이 → 마지막 한 발은 삽 모양. */
-  function planFireworks(st, t0, n) {
+  function planFireworks(st, t0, n, months) {
     const out = [];
     const hasShovel = n >= 4, willows = n >= 9 ? 4 : 0, smalls = n - willows - (hasShovel ? 1 : 0);
     const step = smalls > 1 ? Math.min(0.125, 0.75 / (smalls - 1)) : 0;
@@ -201,7 +187,7 @@
       // 쏘는 자리: (i번째) 달의 옆구리. 쌓인 달이 없으면 바닥에서.
       let lx = x, ly = GROUND - 8, band = -1;
       if (bandsUp > 0) {
-        band = i % bandsUp;
+        band = (months ? months[i] : i) % bandsUp;
         const ym = GROUND - (bandBottom(band) + Math.min(BAND_TOP[band], st.dig.h)) / 2;
         lx = CX + side * (halfAt(ym) - 6); ly = ym;
       }
@@ -288,10 +274,10 @@
   function drawGround(g, t, st, lift, gold, pile) {
     g.save();
     const gr = g.createLinearGradient(0, GROUND - 10, 0, H);
-    gr.addColorStop(0, U.mix('#c3d0f6', '#f4f7ff', U.clamp01(lift * 0.9)));
-    gr.addColorStop(0.12, U.mix('#93a4de', '#c9d6ff', U.clamp01(lift * 0.8)));
-    gr.addColorStop(0.45, '#3f4d96');
-    gr.addColorStop(1, '#141a4a');                         // 아래쪽은 어둡게(앱 자막이 얹히는 자리)
+    gr.addColorStop(0, U.mix('#8e9bd6', '#c9d4ff', U.clamp01(lift * 0.9)));
+    gr.addColorStop(0.1, U.mix('#55629f', '#8d9ad6', U.clamp01(lift * 0.8)));
+    gr.addColorStop(0.4, '#1f2756');
+    gr.addColorStop(1, '#070a1a');                         // 아래쪽은 어둡게(앱 자막이 얹히는 자리)
     g.fillStyle = gr;
     g.beginPath(); g.moveTo(0, H);
     for (let x = 0; x <= W; x += 6) g.lineTo(x, GROUND + 5 * Math.sin(x / 71 + 1) + 3 * Math.sin(x / 23));
@@ -402,137 +388,6 @@
       g.font = fNote; g.fillStyle = U.mix(U.mix('#fff1d6', '#3d2200', gk), U.mix('#fff4e0', '#ffe9a8', gk), plate); g.fillText(note, x, 0);
       g.restore(); g.globalAlpha = 1;
     }
-  }
-
-  /* ───────────── 글자 세상 ─────────────
-     새해가 되기 전의 무대는 사물을 제 이름 글자로 그린다: 별은 '별', 눈은 '눈', 산은 '산', 집은 '집', 흙더미는 '삽'과 '질'.
-     2027이 잠기는 순간 연도판에서 퍼지는 고리를 따라 글자가 진짜 그림으로 바뀐다(draw의 reveal). */
-  const hill1 = (x) => GROUND - 96 - 58 * Math.sin(x / W * Math.PI * 1.1 + 0.4) - 22 * Math.sin(x / 47 + 1.3);
-  const hill2 = (x) => GROUND - 44 - 34 * Math.sin(x / W * Math.PI * 1.7 + 2.2) - 10 * Math.sin(x / 31);
-  function skyWords(g, cold) {
-    const gr = g.createLinearGradient(0, 0, 0, H);
-    gr.addColorStop(0, '#04050e'); gr.addColorStop(0.5, '#070b20'); gr.addColorStop(0.76, '#0c1232'); gr.addColorStop(1, '#090d24');
-    g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    if (cold > 0) { g.fillStyle = `rgba(2,3,10,${0.3 * cold})`; g.fillRect(0, 0, W, H); }
-  }
-  function drawStarsWords(g, t) {
-    for (const s of BG_STARS) {
-      const tw = 0.55 + 0.45 * Math.sin(t * s.sp + s.ph);
-      const px = s.big ? 21 : (s.s > 1.3 ? 15 : 11);
-      Fx.stamp(g, Fx.glyph('별', px, s.big ? '#fff6cf' : '#c9d8ff', 800), s.x, s.y, tw * (0.45 + 0.5 * Math.min(1, s.s / 2)));
-    }
-  }
-  function drawFarWords(g, t) {
-    const layer = U.layer('words-hills', W, H, (c) => {
-      c.font = '800 17px "Pretendard", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      const cell = 18;
-      for (let row = 0, y = GROUND - 176; y < GROUND + 8; y += cell, row++) {
-        for (let x = (row % 2 ? cell / 2 : 0) + 5; x < W; x += cell) {
-          if (y - 7 > hill2(x)) c.fillStyle = '#4b5cba';
-          else if (y - 7 > hill1(x)) c.fillStyle = '#2c3982';
-          else continue;
-          c.fillText('산', x, y);
-        }
-      }
-    });
-    g.drawImage(layer, 0, 0);
-    for (let i = 0; i < 10; i++) {                         // 멀리 마을의 불 켜진 집들
-      const hx = 16 + U.hash(i, 61) * (W - 32), hy = GROUND - 26 - U.hash(i, 62) * 40;
-      Fx.stamp(g, Fx.glyph('집', 14, '#ffcf87', 800), hx, hy, 0.7 + 0.3 * Math.sin(t * 1.3 + i));
-    }
-  }
-  function drawGroundWords(g, t, pile) {
-    const layer = U.layer('words-ground', W, H, (c) => {
-      c.textAlign = 'center'; c.textBaseline = 'middle';
-      // 눈밭 바탕은 어둡게 깔아 뒤의 산 글자가 비치지 않게 한다
-      c.fillStyle = '#080b1e'; c.beginPath(); c.moveTo(0, H);
-      for (let x = 0; x <= W; x += 6) c.lineTo(x, GROUND + 5 * Math.sin(x / 71 + 1) + 3 * Math.sin(x / 23));
-      c.lineTo(W, H); c.closePath(); c.fill();
-      const cell = 19;
-      for (let row = 0, y = GROUND + 15; y < H + 10; y += cell, row++) {
-        const q = (y - GROUND) / (H - GROUND);
-        c.font = `800 ${row === 0 ? 18 : 17}px "Pretendard", sans-serif`;
-        c.fillStyle = U.mix('#e6ecff', '#2c3a86', Math.min(1, q * 1.7)); c.globalAlpha = 1 - 0.72 * q;
-        for (let x = (row % 2 ? cell / 2 : 0) + 6; x < W; x += cell) c.fillText('눈', x, y + (row === 0 ? 5 * Math.sin(x / 71 + 1) : 0));
-      }
-    });
-    g.drawImage(layer, 0, 0);
-    for (let i = 0; i < 30; i++) {                          // 반짝이는 눈 글자 몇 개
-      const row = Math.floor(U.hash(i, 72) * 9), y = GROUND + 15 + row * 19, x = (row % 2 ? 9.5 : 0) + 6 + Math.floor(U.hash(i, 71) * 28) * 19;
-      const a = Math.pow(Math.max(0, Math.sin(t * (1.2 + U.hash(i, 73) * 2.2) + U.hash(i, 74) * TAU)), 2);
-      Fx.stamp(g, Fx.glyph('눈', 17, '#ffffff', 800), x, y, 0.8 * a * (0.5 + pile * 0.5));
-    }
-  }
-  // 한 달치 흙띠를 '삽질삽질…' 세 줄로. 가장자리는 글자 단위로 계단지게 끊긴다.
-  const WORD_ROWS = 3;
-  function bandWords(k, gold) {
-    const thick = BAND_TOP[k] - bandBottom(k), wLayer = 2 * BASE_HALF + 8;
-    return U.layer(`words-band-${k}-${gold ? 'g' : 's'}`, wLayer, Math.ceil(thick), (c) => {
-      const cx = wLayer / 2, rowH = thick / WORD_ROWS;
-      const yOf = (ly) => GROUND - BAND_TOP[k] + ly;        // 띠 안의 y → 무대 y
-      c.fillStyle = gold ? '#2a1f06' : '#21181e';
-      c.beginPath(); c.moveTo(cx - halfAt(yOf(0)), 0); c.lineTo(cx + halfAt(yOf(0)), 0); c.lineTo(cx + halfAt(yOf(thick)), thick); c.lineTo(cx - halfAt(yOf(thick)), thick); c.closePath(); c.fill();
-      const px = Math.min(13, rowH * 1.06), cw = px * 1.0;
-      c.font = `800 ${px}px "Pretendard", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-      for (let r = 0; r < WORD_ROWS; r++) {
-        const yc = (r + 0.5) * rowH, half = halfAt(yOf(yc)) - 5, n = Math.floor(2 * half / cw), x0 = cx - (n - 1) * cw / 2;
-        for (let i = 0; i < n; i++) {
-          const jil = (i + r + k) % 2 === 1;
-          c.fillStyle = gold ? (jil ? '#ffe08a' : '#ffc94a') : (jil ? '#a98a70' : '#c9a688');
-          c.fillText(jil ? '질' : '삽', x0 + i * cw, yc + 0.5);
-        }
-      }
-    });
-  }
-  function drawMoundWords(g, t, st) {
-    if (!st.dig) return;
-    const h = fillH(st, t); if (h <= 0.5) return;
-    const digging = t < st.dig.t + st.dig.D;
-    g.save();
-    const gAll = st.gildT == null ? 0 : U.prog(t - st.gildT, 0.1, 1.1);
-    if (gAll > 0.01) { g.globalCompositeOperation = 'lighter'; U.dot(g, CX, GROUND - h * 0.5, 900, '#ffb340', 0.2 * gAll * (0.9 + 0.1 * Math.sin(t * 2.3)), 0.08); g.globalCompositeOperation = 'source-over'; }
-    const nb = bandsShown(h), x0 = CX - BASE_HALF - 4;
-    for (let k = 0; k < nb; k++) {
-      const thick = BAND_TOP[k] - bandBottom(k), rowH = thick / WORD_ROWS;
-      // 아래 줄부터 한 줄씩 쌓인다
-      const rows = Math.min(WORD_ROWS, Math.max(1, Math.ceil((h - bandBottom(k)) / rowH - 0.02)));
-      const sy = (WORD_ROWS - rows) * rowH, yTopBand = GROUND - BAND_TOP[k];
-      const gk = bandGild(st, t, k);
-      const soil = bandWords(k, false), gold = bandWords(k, true);
-      const put = (layer, a) => { if (a <= 0.003) return; g.globalAlpha = a; g.drawImage(layer, 0, sy, layer.width, layer.height - sy, x0, yTopBand + sy, layer.width, layer.height - sy); };
-      if (gk < 1) put(soil, 1);
-      if (gk > 0) put(gold, gk);
-      const fl = Math.max(gk > 0 && gk < 1 ? 0.8 * Math.sin(Math.PI * gk) : 0, REWIND ? 0 : 0.75 * bandFlash(st, t, k));
-      if (fl > 0.01) {                                       // 금으로 바뀌는 순간·불꽃이 솟는 순간 글자가 하얗게 번쩍
-        g.globalCompositeOperation = 'lighter'; put(gold, fl); put(gold, fl * 0.6); g.globalCompositeOperation = 'source-over';
-      }
-      g.globalAlpha = 1;
-    }
-    // 맨 위에 쌓이는 눈: '눈' 글자 한 줄
-    const cap = digging ? 0 : U.prog(t - (st.dig.t + st.dig.D), 0.3, 2.5) * (st.snow ? 1 : 0);
-    if (cap > 0.01) {
-      const yTop = GROUND - h, hT = halfAt(yTop), n = Math.floor(2 * hT / 15);
-      for (let i = 0; i < n; i++) Fx.stamp(g, Fx.glyph('눈', 14, '#f2f6ff', 800), CX - (n - 1) * 7.5 + i * 15, yTop - 7, U.prog(cap * n, i * 0.7, i * 0.7 + 1.5));
-    }
-    g.restore(); g.globalAlpha = 1;
-  }
-  // 삽에서 날아가는 흙덩이도 글자 '삽'
-  function drawClodsWords(g, t, st, wx) {
-    if (!st.dig) return;
-    const d = st.dig, tau = t - d.t; if (tau < 0 || tau > d.D + 0.6) return;
-    d.clods.forEach((c, j) => {
-      const age = tau - c.born; if (age < 0 || age > c.fl + 0.12) return;
-      const q = Math.min(1, age / c.fl);
-      const h0 = digCountAt(d, c.born) / YEAR_DAYS * FULL_H, h1 = digCountAt(d, c.born + c.fl) / YEAR_DAYS * FULL_H;
-      const sx = wx + 70 * WORKER_SCALE, sy = GROUND - h0 - 112 * WORKER_SCALE;
-      const side = U.hash(j, 41) * 2 - 1;
-      const ex = CX + side * (halfAt(GROUND - h1) - 14), ey = GROUND - h1;
-      const x = U.lerp(sx, ex, q), y = U.lerp(sy, ey, q) - 70 * Math.sin(Math.PI * q) * (0.6 + 0.6 * U.hash(j, 42));
-      const sp = Fx.glyph(j % 2 ? '질' : '삽', 17, '#e2c3a4', 800);
-      g.save(); g.translate(x, y); g.rotate((age * 14 + j) * (side > 0 ? 1 : -1)); g.globalAlpha = age < c.fl ? 1 : 1 - (age - c.fl) / 0.12;
-      g.drawImage(sp, -sp.width / 2, -sp.height / 2); g.restore();
-    });
-    g.globalAlpha = 1;
   }
 
   // 치수선: 도면처럼 높이를 적는다 (H = 365삽)
@@ -694,13 +549,19 @@
     g.save(); g.translate(o.x, o.y); g.scale(o.sx, o.sy); g.translate(-o.x, -o.y);
     Worker.draw(g, o.x, o.y, o.scale, o);
     g.restore();
-    // 머리 위 표시(?)
+    return o;
+  }
+  // 머리 위 표시(?) — 글자로 바꾸지 않고 또렷하게 얹는다
+  function drawWorkerMark(g, t, st) {
+    const o = workerState(t, st); if (!o) return;
     if (o.mark) {
       g.save(); g.translate(o.x + 84, o.y - 108 * o.scale); g.scale(o.mark.pop, o.mark.pop); g.rotate(0.2);
       g.font = '400 54px "Black Han Sans", "Pretendard", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.lineWidth = 8; g.strokeStyle = '#141833'; g.lineJoin = 'round'; g.globalAlpha = o.mark.a; g.strokeText(o.mark.text, 0, 0);
       g.fillStyle = '#ffffff'; g.fillText(o.mark.text, 0, 0); g.restore(); g.globalAlpha = 1;
     }
+  }
+  function drawSweat(g, t, o) {
     // 땀방울
     if (o.drops) {
       g.save(); g.fillStyle = '#9fd8ff';
@@ -1012,9 +873,11 @@
     return U.prog(t - st.yearFail.t, 0.1, 0.5) * (1 - U.prog(t - until, 0, 0.4));
   }
 
-  /* 무대 한 장. opts.rewind: 되감는 중(불꽃·도장처럼 번쩍이는 것은 빼고 큰 움직임만 보여 준다)
-     돌려주는 것: 편집기 쪽으로 새어 나갈 빛(ambient) */
-  function draw(g, t, tl, st, opts) {
+  /* 무대는 두 겹으로 그린다.
+     drawScene  — 그림(하늘·산·눈·흙더미·삽질러·연도판·불꽃). main.js가 이것을 newyear.js의 ascii()로 글자로 바꿔 찍는다.
+     drawOverlay — 읽어야 하는 글자(달 이름표·계수판·확인란·카운트다운·도장·말풍선). 글자로 바꾸지 않고 또렷하게 얹는다.
+     opts.rewind: 되감는 중(불꽃·도장처럼 번쩍이는 것은 빼고 큰 움직임만) */
+  function drawScene(g, t, st, opts) {
     const rewind = REWIND = !!(opts && opts.rewind);
     g.save(); g.beginPath(); g.rect(0, 0, W, H); g.clip();
     let lift = 0, amb = { a: 0, color: '#ffd479', y: 600 };
@@ -1026,7 +889,7 @@
     if (st.gildT != null) { const u = t - st.gildT; if (u >= 0) { const f = Math.pow(1 - U.prog(u, 0, 1.4), 2) * 0.7; lift += f * 0.4; if (f > amb.a) amb = { a: f, color: '#ffc45a', y: GROUND - 260 }; } }
     const cold = chill(st, t);
     if (cold > 0) { const u = t - st.yearFail.t; const f = U.bump(u, 0, 0.1, 0.3, 0.9) * 0.6; if (f > amb.a) amb = { a: f, color: '#ff5a70', y: BOARD.cy }; }
-    lift = rewind ? 0 : Math.min(0.5, lift);                  // 화면 전체가 번쩍이지 않게(되감을 때는 아예 끈다)
+    lift = rewind ? 0 : Math.min(0.5, lift);
     if (rewind) amb = { a: 0, color: '#ffd479', y: 600 };
     const goldAmt = st.gildT == null ? 0 : U.prog(t - st.gildT, 0.1, 1.1);
     const dawn = st.yearUp ? U.prog(t - st.yearUp.lock, 0, 1.6) : 0;
@@ -1035,64 +898,39 @@
     const pile = st.snow ? U.clamp01((t - st.snow.t - 2) / 9) * Math.min(1, snowN / 200) : 0;
     const ws = workerState(t, st), wx = ws ? ws.x : CX;
 
-    /* 글자 세상 → 진짜 세상: 2027이 잠기는 순간 연도판에서 고리가 퍼지고, 고리 안쪽부터 글자가 진짜 그림이 된다.
-       reveal 0 = 전부 글자, 1 = 전부 진짜. 글자 세상을 끄면(TYPED 꺼짐) 처음부터 진짜 그림이다. */
-    const reveal = !TYPED ? 1 : (st.yearUp ? U.easeOutCubic(U.prog(t - st.yearUp.lock, 0, 0.8)) : 0);
-    const RMAX = 1520, rr = reveal * RMAX;
-    const real = (fn) => {                                    // 진짜 그림은 고리 안쪽에만
-      if (reveal <= 0) return;
-      if (reveal >= 1) { fn(); return; }
-      g.save(); g.beginPath(); g.arc(CX, BOARD.cy, rr, 0, TAU); g.clip(); fn(); g.restore();
-    };
-    const backReal = () => {
-      Fx.sky(g, 0, W, H, lift);
-      if (cold > 0) { g.fillStyle = `rgba(4,6,20,${0.34 * cold})`; g.fillRect(0, 0, W, H); }
-      drawStars(g, t, Math.min(1, lift * 0.6 + dawn * 0.35));
-      drawFar(g, t, lift, dawn);
-      if (!rewind) for (const b of st.bursts) { if (b.type === 'shape') drawShapeBurst(g, t, b); else Fx.firework(g, t, b); }
-      if (st.snow) Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0, layerHi: 0.78, gold: snowN - 1 });
-      drawGround(g, t, st, lift, goldAmt, pile);
-      drawMound(g, t, st, lift);
-      if (!rewind) drawClods(g, t, st, wx);
-    };
-    const backWords = () => {
-      skyWords(g, cold);
-      drawStarsWords(g, t);
-      drawFarWords(g, t);
-      if (!rewind) for (const b of st.bursts) { if (b.type === 'shape') drawShapeBurst(g, t, b); else Fx.firework(g, t, b); }
-      if (st.snow) Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0, layerHi: 0.78, gold: snowN - 1, word: '눈' });
-      drawGroundWords(g, t, pile);
-      drawMoundWords(g, t, st);
-      if (!rewind) drawClodsWords(g, t, st, wx);
-    };
-    if (reveal < 1) backWords();
-    real(backReal);
-    drawMoundLabels(g, t, st, 1 - U.prog(reveal, 0.15, 0.5));
-    drawDimension(g, t, st);
+    Fx.sky(g, 0, W, H, lift);
+    drawStars(g, t, Math.min(1, lift * 0.6 + dawn * 0.35));
+    drawFar(g, t, lift, dawn);
+    if (!rewind) for (const b of st.bursts) { if (b.type === 'shape') drawShapeBurst(g, t, b); else Fx.firework(g, t, b); }
+    if (st.snow) Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0, layerHi: 0.78, gold: snowN - 1 });
+    drawGround(g, t, st, lift, goldAmt, pile);
+    drawMound(g, t, st, lift);
+    if (!rewind) drawClods(g, t, st, wx);
     const o = drawWorker(g, t, st);
-    // 가까운 눈만 삽질러 앞에
-    if (st.snow && reveal < 1) Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0.78, layerHi: 1, gold: snowN - 1, word: '눈' });
-    if (st.snow) real(() => Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0.78, layerHi: 1, gold: snowN - 1 }));
-    if (reveal > 0 && reveal < 1) {                           // 퍼져 나가는 고리의 테두리
-      g.save(); g.globalCompositeOperation = 'lighter';
-      const f = 1 - reveal;
-      g.strokeStyle = '#ffe9a8'; g.globalAlpha = Math.min(1, 1.6 * f); g.lineWidth = 3 + 9 * f; g.beginPath(); g.arc(CX, BOARD.cy, rr, 0, TAU); g.stroke();
-      g.strokeStyle = '#ffd76a'; g.globalAlpha = 0.5 * f; g.lineWidth = 26 * f + 4; g.beginPath(); g.arc(CX, BOARD.cy, Math.max(0, rr - 14), 0, TAU); g.stroke();
-      g.restore(); g.globalAlpha = 1;
-    }
-    if (cold > 0.01) {                                        // 실패한 동안은 색이 빠진다(도장·연도판은 그 위에 선명하게)
+    if (o) drawSweat(g, t, o);
+    drawBoard(g, t, st);
+    if (st.snow) Fx.snow(g, sT, st.snow.t, snowN, 0, W, H, { layerLo: 0.78, layerHi: 1, gold: snowN - 1 });
+    if (cold > 0.01) {                                        // 실패한 동안은 색이 빠지고 어두워진다
+      g.fillStyle = `rgba(4,6,20,${0.34 * cold})`; g.fillRect(0, 0, W, H);
       g.globalCompositeOperation = 'saturation'; g.fillStyle = `rgba(128,128,128,${0.6 * cold})`; g.fillRect(0, 0, W, H);
       g.globalCompositeOperation = 'source-over';
     }
-    drawBoard(g, t, st);
-    drawCheckTag(g, t, st);
-    drawCounter(g, t, st, o);
-    drawWaste(g, t, st);
-    if (!rewind) { drawCount(g, t, st); drawStamp(g, t, st); drawBubble(g, t, st); }
-    Fx.vignette(g, 0, W, H, 0.4);
     g.restore();
     REWIND = false;
-    return { ambient: amb, lift, reveal };
+    return { ambient: amb, lift };
+  }
+  function drawOverlay(g, t, st, opts) {
+    const rewind = REWIND = !!(opts && opts.rewind);
+    g.save(); g.beginPath(); g.rect(0, 0, W, H); g.clip();
+    drawMoundLabels(g, t, st, 1);
+    drawDimension(g, t, st);
+    drawWorkerMark(g, t, st);
+    drawCheckTag(g, t, st);
+    drawCounter(g, t, st, workerState(t, st));
+    drawWaste(g, t, st);
+    if (!rewind) { drawCount(g, t, st); drawStamp(g, t, st); drawBubble(g, t, st); }
+    g.restore();
+    REWIND = false;
   }
 
   // 소리 합성용: 무대에서 일어나는 일의 시각
@@ -1130,5 +968,5 @@
 
   // 검증 스크립트가 화면에서 찾아볼 자리(숫자를 파이썬 쪽에 따로 적어 두지 않도록 여기서 내보낸다)
   const LAYOUT = { W, H, CX, GROUND, BANDS, BAND_H, FULL_H, BASE_HALF, TOP_HALF, BOARD, COUNT_Y, WORKER_SCALE, YEAR_DAYS, SOIL, GOLD, MONTH_DAYS, BAND_TOP };
-  window.Stage = { REGISTRY, collect, draw, soundEvents, W, H, CX, GROUND, BOARD, COURIER, COUNT_STEP, ROLL, GILD_STEP, DROP, fillH, LAYOUT };
+  window.Stage = { REGISTRY, META, NY, collect, drawScene, drawOverlay, soundEvents, dayAt, W, H, CX, GROUND, BOARD, COURIER, COUNT_STEP, ROLL, GILD_STEP, DROP, fillH, LAYOUT };
 })();

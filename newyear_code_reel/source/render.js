@@ -6,6 +6,7 @@
    node render.js --events                # 소리 합성·검증용 시각표와 화면 배치를 build/events.json 으로(--out-dir로 위치 변경)
    node render.js --script other.js       # 다른 대본으로 렌더(대본을 바꾸면 영상이 바뀌는지 확인할 때)
    node render.js --no-cold-open --out ../newyear_code_reel_B_silent.mp4   # 첫머리(완성 장면 → 되감기) 없이 빈 무대에서 시작하는 비교판
+   node render.js --raw --still 300       # 왼쪽을 글자로 바꾸기 전 그림 그대로(비교용)
 
    프레임은 시각 t의 순수 함수라서(난수는 씨앗 고정) 몇 번을 돌려도 같은 그림이 나온다.
 */
@@ -32,7 +33,7 @@ function parseArgs(argv) {
     else if (k === '--script') a.script = argv[++i];
     else if (k === '--crf') a.crf = +argv[++i];
     else if (k === '--no-cold-open') a.noCold = true;
-    else if (k === '--typed') a.typed = argv[++i];
+    else if (k === '--raw') a.raw = true;
     else if (k === '--from') a.from = +argv[++i];
     else if (k === '--to') a.to = +argv[++i];
     else { console.error('모르는 옵션: ' + k); process.exit(1); }
@@ -50,7 +51,7 @@ function parseArgs(argv) {
   page.on('pageerror', e => errors.push(String(e && e.stack || e)));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 
-  const url = 'file://' + path.join(HERE, 'index.html') + '?capture=1' + (args.noCold ? '&cold=0' : '') + (args.typed != null ? '&typed=' + args.typed : '');
+  const url = 'file://' + path.join(HERE, 'index.html') + '?capture=1' + (args.noCold ? '&cold=0' : '') + (args.raw ? '&ascii=0' : '');
   if (args.script) {
     // 다른 대본 파일(window.SCRIPT_TEXT = `...`)을 기본 대본보다 먼저 넣는다.
     const txt = fs.readFileSync(path.resolve(args.script), 'utf8');

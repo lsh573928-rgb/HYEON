@@ -9,7 +9,9 @@
 
   A 컨테이너   ffprobe 규격, 프레임 수, bt709 꼬리표, moov가 mdat 앞(faststart), 소리 규격
   B 줄거리     MP4를 다시 풀어 낸 프레임에서 잰다 — 연도판 색과 걸림, 확인란(기본 → 빨강 → 금), 흙더미 높이와 색,
-               실패한 동안 빠지는 색, 편집기 실행 표시와 오류 줄, 제목(낚는 말이 빨개짐 · 맺는 말로 교체), 불꽃 수와 밝기
+               실패한 동안 빠지는 색, 편집기 실행 표시와 오류 줄, 제목(낚는 말이 빨개짐 · 맺는 말로 교체), 불꽃 수와 밝기.
+               새해 전의 무대는 사물을 글자('삽질'·'눈'·'별')로 그리고 새해 뒤에는 진짜 그림이 되므로,
+               흙더미는 두 그림에서 다 통하는 잣대(따뜻한 화소의 몫, 파랑이 빠진 정도)로 잰다
   C 이음매     마지막 프레임 → 첫 프레임 차이(제목 띠 제외)를 이웃 프레임 차이와 견준다
   D 결정성     같은 프레임을 node로 두 번 따로 그려 화소가 완전히 같은지, 시각표·영상이 지금 소스와 맞는지
   E 대본 연동  대본을 바꿔 그리면 영상이 바뀌는지(삽질 수, "수고했어" 삭제, 없는 이름, 불꽃 수, 눈송이 수)
@@ -61,27 +63,27 @@ LIM = dict(
     board_gold=30.0,      #                       금빛이면 이보다 크다 (+105)
     jam_red=15.0,         # 걸린 뒤 연도판의 붉은 정도 R−(G+B)/2 가 이만큼 넘게 는다 (+39)
     ink=120,              # 색을 읽을 글자·테두리로 치는 밝기(휘도): 확인란과 제목 글자. 바탕은 40 아래
-    tag_px=200,           # 확인란으로 치는 최소 밝은 화소 수 (830~2200)
-    tag_tint=40.0,        # 빨강: R−max(G,B), 금: min(R,G)−B 가 이보다 크다 (빨강 +102, 금 +75 · 서로 반대쪽은 +27 아래)
-    tag_cool=15.0,        # 기본(회청색): B−R 이 이보다 크다 (+39)
+    tag_px=200,           # 확인란으로 치는 최소 밝은 화소 수 (930~2100)
+    tag_tint=40.0,        # 빨강: R−max(G,B), 금: min(R,G)−B 가 이보다 크다 (빨강 +103, 금 +74 · 서로 반대쪽은 +24 아래)
+    tag_cool=15.0,        # 기본(회청색): B−R 이 이보다 크다 (+36)
     mound_px=6,           # 흙더미 윗변 오차(px) (+1~2)
     warm=15,              # 흙더미로 치는 화소의 따뜻한 정도 R−B (글자 '삽질' +40, 밤하늘 −26)
     warm_share=0.05,      # 한 줄에서 따뜻한 화소가 이 몫을 넘으면 흙더미 줄 (글자 줄 0.3~0.8, 이름표 줄 0.12, 하늘 0.0)
-    chill_ratio=0.75,     # 실패한 동안 무대 배경 채도 ÷ 걸리기 전 1초 채도의 상한 (0.40)
+    chill_ratio=0.75,     # 실패한 동안 무대 배경 채도 ÷ 걸리기 전 1초 채도의 상한 (0.39)
     mark_px=30,           # 실행 표시(✓·✕)로 치는 최소 화소 수 (155~160)
     mark_tint=12,         # 초록·빨강으로 치는 색 우세: 한 채널이 나머지보다 이만큼 큼 (흐려진 ✕ 39, 창 바탕 −26)
-    head_change=0.02,     # 제목이 바뀌면 글자 띠의 이 비율 넘게 화소가 크게 달라진다 (14.4%)
+    head_change=0.02,     # 제목이 바뀌면 글자 띠의 이 비율 넘게 화소가 크게 달라진다 (13.8%)
     head_same=0.005,      # 제목이 그대로면 이 비율 아래 (0.0%)
-    hook_red=60.0,        # 낚는 말 둘째 줄 글자의 R−G 가 오류 순간 이만큼 넘게 는다 (노랑 +27 → 빨강 +141)
-    fw_glow=3.0,          # 첫 불꽃이 터진 기둥의 하늘 밝기가 이만큼 넘게 는다 (+7.4, 불꽃 줄을 지우면 +0.3)
-    loop_ratio=2.0,       # 이음매 차이 ≤ 이웃 프레임 차이 × loop_ratio + 여유 (평균 3.2 대 2.5, 가장 큰 칸 21 대 20)
+    hook_red=60.0,        # 낚는 말 둘째 줄 글자의 R−G 가 오류 순간 이만큼 넘게 는다 (노랑 +28 → 빨강 +142)
+    fw_glow=3.0,          # 첫 불꽃이 터진 기둥의 하늘 밝기가 이만큼 넘게 는다 (+6.2, 불꽃 줄을 지우면 +0.3)
+    loop_ratio=2.0,       # 이음매 차이 ≤ 이웃 프레임 차이 × loop_ratio + 여유 (평균 3.0 대 3.6, 가장 큰 칸 22 대 19)
     loop_floor=0.5,       #   평균 차이에 주는 여유
     loop_block_floor=5.0, #   가장 큰 칸 차이에 주는 여유
     fresh_block=12.0,     # 지금 그린 화면과 MP4의 칸별 차이 상한: 압축 손실뿐이면 3.5~5.4, 옛 렌더면 68~142
-    snow_ratio=0.5,       # 눈송이를 줄인 쪽의 밝은 화소 수 ÷ 많은 쪽 (30송이 36 ÷ 300송이 569 = 0.06)
+    snow_ratio=0.5,       # 눈송이를 줄인 쪽의 밝은 화소 수 ÷ 많은 쪽 (30송이 254 ÷ 300송이 1010 = 0.25 — 별빛이 함께 세어진다)
     bright=90,            # 편집기·제목 글자로 치는 밝기(휘도 0..255). 창 바탕은 25쯤, 가장 흐린 글자가 105쯤
     solid=160,            # '밝은 덩어리'(눈송이·별·글자 속)로 치는 밝기
-    solid_run=20,         # 맨 위에 가만히 있는 밝은 가로 줄의 최대 길이(px). 별이 최대 11, 제목 글자면 30 이상
+    solid_run=20,         # 맨 위에 가만히 있는 밝은 가로 줄의 최대 길이(px). 별·불꽃 잔불은 6 이하, 제목 글자면 30 이상
     card_margin=16,       # 코드 글자 끝과 창 오른쪽 끝 사이 최소 여백(px) (127)
     lufs=(-16.0, -12.0),  # 통합 음량 범위
     true_peak=-1.0,       # 트루 피크 상한(dBTP)
@@ -761,7 +763,7 @@ def check_story(rep: Report, reel: Reel, pic, plan: dict):
 
 # ======================================================================== C. 이음매
 def check_loop(rep: Report, reel: Reel, pic):
-    """마지막 프레임 → 첫 프레임이 여느 프레임 넘김만큼만 달라야 한다(제목은 맺는 말 → 낚는 말로 바뀌므로 뺀다).
+    """마지막 프레임 → 첫 프레임이 여느 프레임 넘김만큼만 달라야 한다(제목은 끝에서 맺는 말 → 낚는 말로 바뀌는 중이라 뺀다).
     평균 차이는 영상 한가운데의 이웃 프레임과, 한 군데만 튀는지는 바로 앞 이웃 프레임(같은 불꽃이 떠 있는 장면)과 견준다."""
     seam, seam_block = reel.scene_diff(pic("last"), pic("first"))
     near, near_block = reel.scene_diff(pic("last1"), pic("last"))
@@ -769,12 +771,14 @@ def check_loop(rep: Report, reel: Reel, pic):
     limit = mid * LIM["loop_ratio"] + LIM["loop_floor"]
     limit_block = near_block * LIM["loop_ratio"] + LIM["loop_block_floor"]
     y0, y1 = reel.head_rows()
+    head = reel.head_change(pic("last"), pic("first"))
     rep.add("C", "마지막 → 첫 프레임", seam <= limit and seam_block <= limit_block,
             f"평균 차이 {seam:.2f} (기준 ≤ {limit:.2f} = 영상 가운데 이웃 프레임 {reel.frames // 2}→{reel.frames // 2 + 1}의 {mid:.2f} × {LIM['loop_ratio']} + 여유) · "
             f"가장 큰 {BLOCK}px 칸 {seam_block:.1f} (기준 ≤ {limit_block:.1f} = 바로 앞 이웃 프레임 {reel.last - 1}→{reel.last}의 {near_block:.1f} × {LIM['loop_ratio']} + 여유) — "
-            f"참고: 바로 앞 이웃의 평균 {near:.2f}, 가운데 이웃의 가장 큰 칸 {mid_block:.1f} (제목 띠 y {y0}~{y1} 제외)",
+            f"참고: 바로 앞 이웃의 평균 {near:.2f}, 가운데 이웃의 가장 큰 칸 {mid_block:.1f} · 제목 띠 y {y0}~{y1}은 빼고 쟀고, "
+            f"그 띠에서 크게 달라진 화소는 {head:.1%}",
             seam=seam, seam_block=seam_block, near=near, near_block=near_block, middle=mid, middle_block=mid_block,
-            limit=limit, limit_block=limit_block)
+            limit=limit, limit_block=limit_block, head_changed=head)
 
 
 # ======================================================================== D. 결정성
@@ -1008,21 +1012,24 @@ def check_audio(rep: Report, mp4: Path, reel: Reel, audio: dict | None):
     rep.add("G", "통합 음량", lo <= lufs <= hi, f"{lufs:.1f} LUFS (기준 {lo}~{hi})", lufs=lufs)
     rep.add("G", "트루 피크", peak <= LIM["true_peak"], f"{peak:.1f} dBTP (기준 ≤ {LIM['true_peak']})", true_peak=peak)
 
-    # 침묵 구간: 실패 도장이 찍히고 0.35초 뒤부터, 걸린 줄 다음 줄의 첫 글쇠까지
+    # 침묵 구간: 실패 도장이 찍히고 0.35초 뒤부터 걸린 줄 다음 줄의 첫 글쇠까지. 그 글쇠가 더 먼저 찍히는 박자표라면
+    # (음악은 끊기고 타자 소리만 남는 정적) 그 줄의 Enter까지를 잰다 — 타자 소리까지 넣고도 조용해야 한다.
     jam, stamp, failed = reel.t("jam"), reel.t("stamp"), reel.line_for(reel.t("jam"))
-    next_key = None if failed is None else min((e["t"] for e in reel.d["events"]
-                                                if e["type"] in ("key", "space") and e.get("line") == failed["idx"] + 1), default=None)
-    if next_key is None or next_key <= stamp + 0.35:
+    typed = [e["t"] for e in reel.d["events"]
+             if failed and e.get("line") == failed["idx"] + 1 and e["type"] in ("key", "space", "enter", "enter_error")]
+    start = None if stamp is None else stamp + 0.35
+    if not typed or max(typed) <= start:
         rep.skip("G", "도장 뒤 침묵", "걸리는 장면이나 그 뒤에 치는 줄이 없음")
         return
+    end, what = (typed[0], "다음 줄 첫 글쇠") if typed[0] > start else (typed[-1], f"다음 줄 Enter(첫 글쇠가 {typed[0]:.2f}초로 더 먼저라 타자 소리 포함)")
     rate = int(SPEC["audio"][1])
     raw = run(["ffmpeg", "-v", "error", "-i", mp4, "-map", "0:a:0", "-ac", "2", "-ar", rate, "-f", "f32le", "-"], check=True).stdout
     pcm = np.frombuffer(raw, np.float32).reshape(-1, 2)
-    quiet = rms_db(pcm, rate, stamp + 0.35, next_key)
+    quiet = rms_db(pcm, rate, start, end)
     loud = rms_db(pcm, rate, max(0.0, jam - 2.0), jam)
     rep.add("G", "도장 뒤 침묵", loud - quiet >= LIM["silence_db"],
-            f"{stamp + 0.35:.2f}~{next_key:.2f}초 RMS {quiet:.1f} dB · 걸리기 전 2초 {loud:.1f} dB → 차이 {loud - quiet:.1f} dB "
-            f"(기준 ≥ {LIM['silence_db']})", quiet_db=quiet, loud_db=loud)
+            f"도장 0.35초 뒤 {start:.2f}초 ~ {what} {end:.2f}초 RMS {quiet:.1f} dB · 걸리기 전 2초 {loud:.1f} dB → 차이 {loud - quiet:.1f} dB "
+            f"(기준 ≥ {LIM['silence_db']})", quiet_db=quiet, loud_db=loud, window=(start, end))
 
 
 # ======================================================================== 확인용 그림

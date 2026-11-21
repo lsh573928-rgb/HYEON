@@ -96,7 +96,7 @@ FULL = 0.26                         # 다 구간 가락의 크기
 THIN = FULL * 10 ** (-11 / 20)      # 가 구간 가락 — 옥타브 겹침까지 치면 다 구간보다 약 12 dB 작다
 DUCK = 1 - 10 ** (-5 / 20)          # 가락 음이 울리는 순간 불꽃이 비켜 주는 깊이(5 dB)
 
-STAMP_LAND = 0.08                   # 도장이 내려와 찍히기까지(초) — 화면에서는 커다랗게 나타나 줄어들며 찍힌다
+STAMP_LAND = 0.10                   # 도장이 내려와 찍히기까지(초) — 화면에서는 커다랗게 나타나 줄어들다가 이때 먼지 고리가 퍼진다
 BUZZ = 0.25                         # 버저 길이(초)
 SYNC = ("hook_slam", "board_land", "worker_land", "dig_hit", "count", "jam", "bubble", "year_gold", "fw_burst")    # 화면과 맞는지 재 볼 사건
 
@@ -141,7 +141,7 @@ class Timeline:
         self.jam = self.time("jam")                                     # 음악이 끊기는 순간
         after = [e for e in self.events if self.jam is not None and e["t"] > self.jam]
         self.resume = next((e["t"] for e in after if e["type"] == "bubble" and e.get("thanked")), None)    # 음악이 돌아오는 순간
-        self.reopen = next((e["t"] for e in after if e["type"] not in QUIET), self.duration)               # 무대 소리가 다시 나는 순간
+        self.reopen = next((e["t"] for e in after if e["type"] not in QUIET), None)                        # 무대 소리가 다시 나는 순간
 
     def all(self, kind):
         return self.by.get(kind, [])
@@ -197,6 +197,12 @@ def ramp(t, t0, dur):
     return np.clip((t - t0) / dur, 0, 1)
 
 
+def shut(t, t0, t1, out=CHOP, back=0.003):
+    """t0에서 out초 만에 닫히고 t1 직전 back초 동안 다시 열리는 문(1 열림 · 0 닫힘). t1이 None이면 끝까지 닫혀 있다."""
+    gate = 1 - ramp(t, t0, out)
+    return gate if t1 is None else np.maximum(gate, ramp(t, t1 - back, back))
+
+
 def unit(x):
     return x / (np.max(np.abs(x)) + 1e-12)
 
@@ -213,6 +219,11 @@ def osc(freq):
 def glide(f0, f1, dur, curve=1.0):
     """f0에서 f1로 미끄러지는 주파수. curve가 1보다 작으면 처음에 빨리 움직인다."""
     return f0 * (f1 / f0) ** ((tt(dur) / dur) ** curve)
+
+
+def thud(f0, f1, dur, tau, drive=2.5):
+    """낮은 '쿵': f0에서 f1로 떨어지는 사인을 살짝 찌그러뜨려 배음을 얹는다 — 작은 스피커에서도 들리고, 같은 세기에 봉우리는 낮다."""
+    return np.tanh(drive * osc(glide(f0, f1, dur, 0.6)) * env(dur, 0.003, tau)) / math.tanh(drive)
 
 
 def square(freq, top):
@@ -410,16 +421,16 @@ def music(m: Mix, tl: Timeline):
             for f, gain in ((root, 0.014), (2 * root, 0.010)):
                 m.put("화음", pad_tone(f, min(t1, cut) - t0, attack=0.15), t0, gain, 0.0, rev=0.4)
         elif section == "C" and t0 < t1:
-            m.put("화음", pad_tone(root, t1 - t0), t0, 0.030, 0.0, rev=0.4)
+            m.put("화음", pad_tone(root, t1 - t0), t0, 0.038, 0.0, rev=0.4)
             for i, f in enumerate(upper):
-                m.put("화음", pad_tone(f, t1 - t0), t0, 0.022, 0.25 * (i - 1), rev=0.5)
+                m.put("화음", pad_tone(f, t1 - t0), t0, 0.028, 0.25 * (i - 1), rev=0.5)
 
     rng = seeded("방울")
     half = tl.beat / 2
     for i in range(int((notes[-1].t - tl.downbeat) / half + 1e-6) + 1):  # 끝음까지 8분음표마다, 정박이 조금 세다
         t = tl.downbeat + i * half
         if tl.section(t) == "C":
-            m.put("방울", sleigh(rng), t, (0.034 if i % 2 == 0 else 0.019) * rng.uniform(0.85, 1.0), rng.uniform(-0.25, 0.25), rev=0.35)
+            m.put("방울", sleigh(rng), t, (0.19 if i % 2 == 0 else 0.11) * rng.uniform(0.85, 1.0), rng.uniform(-0.25, 0.25), rev=0.35)
     return notes
 
 
@@ -428,8 +439,8 @@ def headline(m: Mix, tl: Timeline):
     """머리글: 0초 낚는 말이 떨어지는 '쿵'(못갖춘마디 음과 함께) · 되감기 '쮸욱' · 맺는 말이 뜰 때 반짝임."""
     rng = seeded("머리글")
     for e in tl.all("hook_slam"):
-        m.put("머리글", osc(glide(150, 42, 0.6, 0.6)) * env(0.6, 0.004, 0.15), e["t"], 0.16, 0.0, rev=0.2)
-        m.put("머리글", burst(rng, 0.25, 70, 900, 0.002, 0.045), e["t"], 0.16, 0.0, rev=0.3)
+        m.put("머리글", thud(150, 42, 0.6, 0.12), e["t"], 0.11, 0.0, rev=0.2)
+        m.put("머리글", burst(rng, 0.25, 70, 900, 0.002, 0.045), e["t"], 0.13, 0.0, rev=0.3)
         m.put("머리글", burst(rng, 0.04, 1500, 6000, 0.0005, 0.005), e["t"], 0.05, 0.0, rev=0.3)
     for e in tl.all("rewind"):
         q = tt(e["dur"]) / e["dur"]
@@ -511,7 +522,7 @@ def board(m: Mix, tl: Timeline):
         m.put("무대", fade(whoosh, 0, 0.02), drop, 0.06, pan, rev=0.3)
     if land is not None:
         m.put("무대", burst(rng, 0.05, 900, 4200, 0.0005, 0.007), land, 0.10, pan, rev=0.3)
-        m.put("무대", osc(glide(170, 80, 0.16)) * env(0.16, 0.002, 0.035), land, 0.10, pan, rev=0.3)
+        m.put("무대", thud(170, 80, 0.16, 0.03), land, 0.07, pan, rev=0.3)
         m.put("무대", bell(note("C6"), 0.9, tau=0.3), land, 0.05, pan, rev=0.6)
     if drop is not None and settle is not None and settle > drop:
         flaps = max(1, round((settle - drop) / 0.05))
@@ -525,9 +536,9 @@ def board(m: Mix, tl: Timeline):
             tooth = flap_tick(rng) + 0.6 * osc(glide(900 - 250 * u, 600 - 250 * u, 0.02)) * env(0.02, 0.0005, 0.005)
             m.put("무대", tooth, e["t"] + 0.86 * e["dur"] * u ** 1.5, 0.04 + 0.05 * u, pan, rev=0.25)
     for e in tl.all("year_gold"):
-        m.put("무대", osc(glide(170, 75, 0.2)) * env(0.2, 0.002, 0.045), e["t"], 0.11, pan, rev=0.3)
-        m.put("무대", burst(rng, 0.05, 700, 3800, 0.0005, 0.008), e["t"], 0.09, pan, rev=0.3)
-        for i, (name, gain, tau) in enumerate((("C6", 0.060, 0.55), ("G6", 0.050, 0.5), ("C7", 0.040, 0.45), ("E7", 0.022, 0.2))):
+        m.put("무대", thud(170, 75, 0.2, 0.04), e["t"], 0.07, pan, rev=0.3)
+        m.put("무대", burst(rng, 0.05, 700, 3800, 0.0005, 0.008), e["t"], 0.08, pan, rev=0.3)
+        for i, (name, gain, tau) in enumerate((("C6", 0.050, 0.55), ("G6", 0.042, 0.5), ("C7", 0.032, 0.45), ("E7", 0.018, 0.2))):
             m.put("무대", bell(note(name), 1.8, tau=tau), e["t"], gain, pan + 0.2 * (i - 1.5), rev=0.7)   # 딸림화음 '도 솔 도 미'
         for side in (-0.3, 0.3):
             m.put("무대", burst(rng, 1.6, 5000, 13000, 0.18, 0.4), e["t"], 0.03, pan + side, rev=0.5)
@@ -538,9 +549,9 @@ def snow(m: Mix, tl: Timeline):
     rng = seeded("눈")
     for e in tl.all("snow_start"):
         for side in (-0.85, -0.05):
-            m.put("무대", burst(rng, 2.4, 5500, 12500, 0.35, 0.65), e["t"], 0.035, side, rev=0.5)
-        for name, dt, side in (("C7", 0.0, -0.7), ("A6", 0.17, -0.2), ("F6", 0.41, -0.5)):
-            m.put("무대", bell(note(name), 0.9, tau=0.3, partials=GLASS), e["t"] + dt, 0.05, side, rev=0.8)
+            m.put("무대", burst(rng, 2.4, 5500, 12500, 0.35, 0.65), e["t"], 0.028, side, rev=0.5)
+        for name, dt, side in (("C7", 0.0, -0.7), ("A6", 0.17, -0.2), ("G6", 0.41, -0.5)):
+            m.put("무대", bell(note(name), 0.9, tau=0.3, partials=GLASS), e["t"] + dt, 0.04, side, rev=0.8)
 
 
 def night_air(m: Mix, tl: Timeline):
@@ -563,22 +574,22 @@ def worker(m: Mix, tl: Timeline):
         whistle = osc(glide(1900, 620, land - fall) * (1 + 0.012 * np.sin(2 * np.pi * 9 * t)))
         m.put("무대", fade(whistle, 0.03, 0.02), fall, 0.04, pan, rev=0.3)
     if land is not None:
-        m.put("무대", osc(glide(125, 52, 0.25, 0.6)) * env(0.25, 0.003, 0.06), land, 0.12, pan, rev=0.25)
+        m.put("무대", thud(125, 52, 0.25, 0.05), land, 0.08, pan, rev=0.25)
         m.put("무대", burst(rng, 0.25, 200, 1800, 0.004, 0.05), land, 0.07, pan, rev=0.3)
         for name, dt, length in (("G5", 0.07, 0.05), ("C6", 0.125, 0.09)):      # 뿅: 솔 → 도
             blip = (sine(note(name), length) + 0.25 * sine(2 * note(name), length)) * env(length, 0.003, 0.03)
             m.put("무대", blip, land + dt, 0.055, pan, rev=0.4)
     for e in tl.all("bubble"):
-        m.put("무대", osc(glide(380, 1000, 0.06)) * env(0.06, 0.003, 0.018), e["t"], 0.12, pan + 0.15, rev=0.3)
+        m.put("무대", osc(glide(380, 1000, 0.06)) * env(0.06, 0.003, 0.018), e["t"], 0.10, pan + 0.15, rev=0.3)
     for e in tl.all("say_glyph"):                                       # 딸림화음을 타고 오른다: C6 E6 G6 C7 …
         f = note("C6") * 2 ** (e["i"] // 3 + (0, 4, 7)[e["i"] % 3] / 12)
-        m.put("무대", bell(f, 0.7, tau=0.22, partials=CELESTA), e["t"], 0.075, pan + 0.1 * e["i"], rev=0.6)
+        m.put("무대", bell(f, 0.7, tau=0.22, partials=CELESTA), e["t"], 0.06, pan + 0.1 * e["i"], rev=0.6)
     for e in tl.all("check"):
         m.put("무대", burst(rng, 0.02, 2500, 8000, 0.0003, 0.002), e["t"], 0.05, pan, rev=0.3)
         m.put("무대", sine(3136, 0.04) * env(0.04, 0.0005, 0.008), e["t"], 0.03, pan, rev=0.4)
     for e in tl.all("gild"):                                            # 흙더미가 쌓일 때와 같은 음을 한 옥타브 위에서 두 배 빠르게
         chime = musicbox(penta(e["k"] - (tl.bands - 1) + 10, 5), 0.35, ring=0.3)
-        m.put("무대", chime, e["t"], 0.035, pan + 0.03 * (e["k"] - tl.bands / 2), rev=0.6)
+        m.put("무대", chime, e["t"], 0.028, pan + 0.03 * (e["k"] - tl.bands / 2), rev=0.6)
     for e in tl.all("waste_zero"):
         for dt in (0.0, 0.03, 0.07):
             m.put("무대", sine(rng.uniform(3800, 6200), 0.06) * env(0.06, 0.001, 0.014), e["t"] + dt, 0.025, pan + rng.uniform(0.1, 0.4), rev=0.6)
@@ -594,7 +605,7 @@ def shovel_hit(rng, bright=1.0):
 
 
 def dig(m: Mix, tl: Timeline):
-    """삽질: 삽 한 번에 '칙'(8분음표 둘 → 16분음표 열 — 이 장면의 타악기), 한 달치가 쌓일 때마다 5음 음계가 한 음씩 오른다.
+    """삽질: 삽이 박힐 때마다 '칙'(이 장면의 타악기 — 박자는 시각표가 정한다), 한 달치가 쌓일 때마다 5음 음계가 한 음씩 오른다.
     마지막 달(12월)이 으뜸음 F6에 닿는다."""
     rng = seeded("삽질")
     pan = tl.pan_stage
@@ -617,14 +628,14 @@ def countdown(m: Mix, tl: Timeline):
     for i, e in enumerate(counts):
         f = penta(7 + i - (len(counts) - 1))                            # … 파 솔 라(A5)로 끝난다
         block = sine(f, 0.12) * env(0.12, 0.0008, 0.022) + 0.5 * sine(2.76 * f, 0.12) * env(0.12, 0.0005, 0.009)
-        m.put("무대", block, e["t"], 0.075 + 0.012 * i, pan, rev=0.3)
-        m.put("무대", burst(rng, 0.03, 1800, 6000, 0.0004, 0.003), e["t"], 0.035, pan, rev=0.2)
-        m.put("무대", osc(glide(150, 46, 0.32, 0.6)) * env(0.32, 0.003, 0.085), e["t"], 0.07 + 0.02 * i, 0.6 * pan, rev=0.25)
-        m.put("무대", burst(rng, 0.12, 120, 800, 0.002, 0.03), e["t"], 0.05 + 0.012 * i, 0.6 * pan, rev=0.25)
+        m.put("무대", block, e["t"], 0.115 + 0.015 * i, pan, rev=0.3)
+        m.put("무대", burst(rng, 0.03, 1800, 6000, 0.0004, 0.003), e["t"], 0.045, pan, rev=0.2)
+        m.put("무대", thud(150, 46, 0.32, 0.07), e["t"], 0.06 + 0.015 * i, 0.6 * pan, rev=0.25)
+        m.put("무대", burst(rng, 0.12, 120, 800, 0.002, 0.03), e["t"], 0.065 + 0.015 * i, 0.6 * pan, rev=0.25)
     if counts:
         span = counts[1]["t"] - counts[0]["t"] if len(counts) > 1 else tl.beat
         riser = moving_noise(rng, glide(500, 5200, span), 0.5) * (tt(span) / span) ** 2.2
-        m.put("무대", fade(riser, 0, 0.012), counts[-1]["t"], 0.05, pan, rev=0.25)
+        m.put("무대", fade(riser, 0, 0.012), counts[-1]["t"], 0.13, pan, rev=0.25)
 
 
 def twist(m: Mix, tl: Timeline):
@@ -634,19 +645,19 @@ def twist(m: Mix, tl: Timeline):
     pan = 0.6 * tl.pan_stage
     for e in tl.all("jam"):
         clack = sum(a * sine(f, 0.12) for f, a in ((1180, 1.0), (1870, 0.7), (2930, 0.5), (4410, 0.3))) * env(0.12, 0.0005, 0.03)
-        m.put("버저", unit(clack), e["t"], 0.055, pan, rev=0.25)
+        m.put("버저", unit(clack), e["t"], 0.05, pan, rev=0.25)
         m.put("버저", burst(rng, 0.03, 2000, 7000, 0.0003, 0.003), e["t"], 0.05, pan, rev=0.25)
         q = tt(BUZZ) / BUZZ
         droop = 1 - 0.04 * q                                            # 끝으로 갈수록 살짝 처진다
         buzz = square(note("B2") * droop, 3200) + 0.7 * square(note("F3") * droop, 3200)    # 증4도 — 틀렸다는 소리
         buzz *= 1 - 0.18 * np.sin(2 * np.pi * 31 * BUZZ * q) ** 2
-        m.put("버저", fade(buzz, 0.004, 0.03), e["t"], 0.06, pan, rev=0.12)
+        m.put("버저", fade(buzz, 0.004, 0.03), e["t"], 0.054, pan, rev=0.12)
     for e in tl.all("stamp"):
         land = e["t"] + STAMP_LAND
         swish = moving_noise(rng, glide(1600, 500, STAMP_LAND), 0.5) * tt(STAMP_LAND) / STAMP_LAND
         m.put("도장", swish, e["t"], 0.03, pan)
-        m.put("도장", osc(glide(115, 44, 0.45, 0.6)) * env(0.45, 0.003, 0.085), land, 0.20, pan, rev=0.1)
-        m.put("도장", burst(rng, 0.22, 80, 700, 0.002, 0.035), land, 0.19, pan, rev=0.1)
+        m.put("도장", thud(115, 44, 0.45, 0.07), land, 0.14, pan, rev=0.1)
+        m.put("도장", burst(rng, 0.22, 80, 700, 0.002, 0.035), land, 0.16, pan, rev=0.1)
         m.put("도장", burst(rng, 0.05, 900, 2800, 0.0005, 0.007), land, 0.07, pan, rev=0.1)
     for e in tl.all("jam_drop"):
         m.put("도장", osc(glide(260, 150, 0.08)) * env(0.08, 0.002, 0.018), e["t"], 0.045, pan, rev=0.1)
@@ -665,11 +676,14 @@ def fireworks(m: Mix, tl: Timeline):
         return tl.pan(e["x"] * tl.stage_w)
 
     def pop(t, s, level, pan, tail=1.0):
-        """한 번 터지는 '펑': 낮은 울림 + 몸통 + 날카로운 첫소리. s(0~1)가 클수록 낮고 길다."""
+        """한 번 터지는 '펑': 낮은 울림 + 몸통을 살짝 찌그러뜨린 것(작은 스피커에서도 들리고 봉우리는 낮다) + 날카로운 첫소리.
+        s(0~1)가 클수록 낮고 길다."""
         tau = (0.07 + 0.2 * s ** 1.5) * tail
         low = 62 / s ** 0.9
-        m.put("불꽃", osc(glide(2.2 * low, 0.8 * low, 5 * tau, 0.5)) * env(5 * tau, 0.003, tau), t, 0.5 * level, 0.7 * pan, rev=0.4)
-        m.put("불꽃", burst(rng, 4 * tau, 60, 600 / s, 0.002, 0.6 * tau), t, 0.8 * level, pan, rev=0.6)
+        thump = 0.45 * osc(glide(2.2 * low, 0.8 * low, 5 * tau, 0.5)) * env(5 * tau, 0.003, tau)
+        body = burst(rng, 4 * tau, 60, 600 / s, 0.002, 0.6 * tau)
+        thump[:len(body)] += body
+        m.put("불꽃", np.tanh(2.0 * thump), t, level, pan, rev=0.5)
         m.put("불꽃", burst(rng, 0.04, 1400, 6500, 0.0004, 0.005), t, 0.35 * level, pan, rev=0.5)
 
     for e in tl.all("fw_launch"):
@@ -684,36 +698,20 @@ def fireworks(m: Mix, tl: Timeline):
     for e in bursts:
         kind, pan = e.get("kind"), pan_of(e)
         s = 1.0 if kind == "shape" else max(e["size"] / biggest, 0.2)
-        level = {"shape": 0.50, "willow": 0.16}.get(kind, 0.26) * s ** 1.5
+        level = {"shape": 0.28, "willow": 0.06}.get(kind, 0.09) * s ** 1.5
         pop(e["t"], s, level, pan, tail=1.5 if kind == "shape" else 1.0)
         if kind == "double":                                            # 두 겹 불꽃: 작게 한 번 더
             pop(e["t"] + 0.09, 0.7 * s, 0.45 * level, pan)
         span = (0.35 + 0.6 * s) * (1.6 if kind in ("willow", "shape") else 1.0)
-        for u in rng.uniform(0, 1, int(10 + 50 * s ** 2)) ** 1.5:       # 타닥타닥 — 앞쪽에 몰려 있다
+        for u in rng.uniform(0, 1, int(14 + 70 * s ** 2)) ** 1.5:       # 타닥타닥 — 앞쪽에 몰려 있다
             grain = burst(rng, 0.008, 2600, 9500, 0.0002, rng.uniform(0.0006, 0.002))
-            m.put("불꽃", grain, e["t"] + 0.07 + span * u, 0.05 * s * (1 - u) ** 1.2 * rng.uniform(0.4, 1.0),
+            m.put("불꽃", grain, e["t"] + 0.07 + span * u, 0.07 * s * (1 - u) ** 1.2 * rng.uniform(0.4, 1.0),
                   pan + 0.3 * s * rng.uniform(-1, 1), rev=0.3)
         if kind in ("willow", "shape"):                                 # 흘러내리는 불티
-            m.put("불꽃", burst(rng, 1.4, 3000, 9000, 0.05, 0.4), e["t"] + 0.05, 0.03 * s, pan, rev=0.5)
+            m.put("불꽃", burst(rng, 1.4, 3000, 9000, 0.05, 0.4), e["t"] + 0.05, 0.045 * s, pan, rev=0.5)
 
 
 # ======================================================================== 구간 나누기 · 마스터
-def arrange(layers: dict, tl: Timeline):
-    """겹마다 ① 연도판이 걸리는 순간 음악·무대의 울림을 뚝 끊고(나 구간 — 타자·버저·도장만 남는다)
-    ② 영상 끝에서 천천히 닫는다(반복 재생의 첫 음이 앞 바퀴의 꼬리에 묻히지 않게). 밤공기는 주기 잡음이라 닫지 않는다."""
-    t = np.arange(tl.n) / SR
-    tune = stage = air = np.ones(tl.n)
-    if tl.jam is not None:
-        back = 0.0 if tl.resume is None else ramp(t, tl.resume - 0.003, 0.003)
-        tune = 1 - ramp(t, tl.jam, CHOP) + back
-        stage = 1 - ramp(t, tl.jam, CHOP) + ramp(t, tl.reopen - 0.003, 0.003)
-        air = 1 - ramp(t, tl.jam, 0.06) + ramp(t, tl.reopen, 0.3)
-    start, end = tl.duration - CURTAIN[0], tl.duration - CURTAIN[1]
-    curtain = 0.5 + 0.5 * np.cos(np.pi * ramp(t, start, end - start))
-    gates = {**{name: tune * curtain for name in MUSIC}, "바탕": air, "타자": 1.0, "버저": curtain, "도장": curtain}
-    return {name: x * np.reshape(gates.get(name, stage * curtain), (-1, 1)) for name, x in layers.items()}
-
-
 def duck(tl: Timeline, notes):
     """다 구간의 가락 음이 울리는 순간마다 불꽃이 살짝 비켜 주는 크기 곡선(5ms에 내려갔다가 0.18초 간격으로 돌아온다)."""
     gain = np.ones(tl.n)
@@ -725,6 +723,23 @@ def duck(tl: Timeline, notes):
             part = dip[:max(tl.n - i0, 0)]
             gain[i0:i0 + len(part)] = np.minimum(gain[i0:i0 + len(part)], part)
     return gain
+
+
+def arrange(layers: dict, tl: Timeline, notes):
+    """겹마다 ① 연도판이 걸리는 순간 음악·무대의 울림을 뚝 끊고(나 구간 — 타자·버저·도장만 남는다)
+    ② 가락 음이 울릴 때마다 불꽃을 살짝 낮추고 ③ 영상 끝에서 천천히 닫는다(반복 재생의 첫 음이 앞 바퀴의 꼬리에 묻히지 않게).
+    밤공기는 영상 길이에 맞춘 주기 잡음이라 닫지 않는다."""
+    t = np.arange(tl.n) / SR
+    tune = stage = air = np.ones(tl.n)
+    if tl.jam is not None:
+        tune = shut(t, tl.jam, tl.resume)
+        stage = shut(t, tl.jam, tl.reopen)
+        air = shut(t, tl.jam, None if tl.reopen is None else tl.reopen + 0.3, out=0.06, back=0.3)
+    start, end = tl.duration - CURTAIN[0], tl.duration - CURTAIN[1]
+    curtain = 0.5 + 0.5 * np.cos(np.pi * ramp(t, start, end - start))
+    gates = {**{name: tune * curtain for name in MUSIC}, "불꽃": stage * curtain * duck(tl, notes),
+             "바탕": air, "타자": 1.0, "버저": curtain, "도장": curtain}
+    return {name: x * np.reshape(gates.get(name, stage * curtain), (-1, 1)) for name, x in layers.items()}
 
 
 def k_weighted(x):
@@ -823,14 +838,19 @@ def pitch(x, t0, t1):
     return (k + 0.5 * (a - c) / (a - 2 * b + c)) * SR / size
 
 
-def onset(x, t, before=0.04, after=0.06):
-    """t초 근처(-before ~ +after)에서 소리가 가장 가파르게 커지는 시각(초). 3ms 평균 크기의 앞뒤 차이로 찾는다."""
-    w = int(0.003 * SR)
+def onset(x, t, tone=None, before=0.04, after=0.06):
+    """t초 근처(-before ~ +after)에서 소리가 가장 가파르게 커지는 시각(초). 8ms 평균 크기의 앞뒤 차이로 찾는다.
+    tone(Hz)을 주면 그 음높이의 성분만 본다 — 앞 음의 울림과 섞여 생기는 맥놀이에 속지 않는다."""
+    w = int(0.008 * SR)
     i0 = int(round((t - before) * SR)) - w
     i1 = min(int(round((t + after) * SR)) + w, len(x))
     part = np.concatenate([np.zeros(max(-i0, 0)), x[max(i0, 0):i1]])   # 파일 앞쪽 바깥은 무음
-    power = np.cumsum(np.concatenate([[0.0], part ** 2]))
-    level = np.sqrt((power[w:] - power[:-w]) / w)                       # level[i] = part[i : i+w]의 크기
+    if tone is None:
+        total = np.cumsum(np.concatenate([[0.0], part ** 2]))
+        level = np.sqrt((total[w:] - total[:-w]) / w)                   # level[i] = part[i : i+w]의 크기
+    else:
+        total = np.cumsum(np.concatenate([[0.0], part * np.exp(-2j * np.pi * tone * np.arange(len(part)) / SR)]))
+        level = np.abs(total[w:] - total[:-w]) / w
     return (i0 + w + int(np.argmax(level[w:] - level[:-w]))) / SR
 
 
@@ -867,7 +887,8 @@ def report_tune(tl: Timeline, notes, voice):
             continue
         later = [o.t for o in sounding if o.t > nt.t]
         stop = min([nt.t + nt.beats * tl.beat, tl.duration] + later[:1] + ([tl.jam] if nt.section == "A" and tl.jam else []))
-        heard, hz, want = onset(voice, nt.t), pitch(voice, nt.t + 0.005, stop), note(nt.name)
+        hz, want = pitch(voice, nt.t + 0.005, stop), note(nt.name)
+        heard = onset(voice, nt.t, tone=hz)
         worst_ms, worst_pct = max(worst_ms, abs(heard - nt.t) * 1000), max(worst_pct, abs(hz / want - 1) * 100)
         row(*head, (f"{heard:.3f}", 10), (f"{(heard - nt.t) * 1000:+.0f}ms", 9), (f"{want:.1f}", 10), (f"{hz:.1f}", 10), (f"{(hz / want - 1) * 100:+.2f}%", 0))
     if sounding:
@@ -931,10 +952,9 @@ def main():
     for scene in (headline, typing, couriers, board, snow, night_air, worker, dig, countdown, twist, fireworks):
         scene(m, tl)
     notes = music(m, tl)
-    layers = arrange(m.render(), tl)
-    fx, _, fx_pressed = master(sum(x for name, x in layers.items() if name not in MUSIC))      # 효과음판의 불꽃은 비켜 줄 가락이 없다
-    layers["불꽃"] = layers["불꽃"] * duck(tl, notes)[:, None]
+    layers = arrange(m.render(), tl, notes)
     full, gain, pressed = master(sum(layers.values()))
+    fx, _, fx_pressed = master(sum(x for name, x in layers.items() if name not in MUSIC))      # 같은 겹에서 음악 셋만 뺀다
 
     wavs = {name: args.out_dir / name for name in OUTPUTS}
     for name, x in zip(wavs, (full, fx)):

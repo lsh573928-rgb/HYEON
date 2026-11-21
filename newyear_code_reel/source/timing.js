@@ -6,9 +6,9 @@ window.TIMING = {
   fps: 30,
   duration: 16.0,
   music: { bpm: 120, firstDownbeat: 0.5, bars: 8, beatsPerBar: 4 },
-  /* 영상 첫머리: 완성 장면(0~hold) → 코드 전체 선택(hold~select) → 삭제(select, 첫 박) → 장면이 거꾸로 풀린다.
-     오른쪽 창은 rewindEnd에 비워진 채 첫 줄을 치기 시작하고, 왼쪽 무대는 stageRewindEnd까지 계속 풀린다(빈 무대로 오래 두지 않으려고). */
-  coldOpen: { hold: 0.25, select: 0.5, rewindEnd: 0.9, stageRewindEnd: 1.4 },
+  /* 영상 첫머리: 완성 장면(0~hold) → 실행을 거꾸로 돌려(hold~stageRewindEnd) 빈 무대로.
+     rewindEnd: 터미널에 첫 명령(node render.js 2026.py)이 찍히는 시각 */
+  coldOpen: { hold: 0.25, rewindEnd: 0.9, stageRewindEnd: 1.4 },
   start: 0.9,
   cps: 22,
   enterDelay: 0.1,

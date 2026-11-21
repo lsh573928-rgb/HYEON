@@ -8,7 +8,7 @@
     hat: '#ffc93c', hatDark: '#e2a51d', hatLight: '#ffe58a',
     skin: '#ffd9b5', skinShade: '#f2bd94', cheek: '#ff9d8a',
     vest: '#ff8a3d', vestDark: '#e06a22', stripe: '#e6ff7a',
-    jacket: '#2b3a6e', pants: '#243059', boot: '#161a2c', glove: '#fff3d1',
+    jacket: '#4c66c2', pants: '#3c4e9c', boot: '#2b3358', glove: '#fff3d1',
     wood: '#c28a55', woodDark: '#9a6a3d', steel: '#cfd9ee', steelDark: '#8d9bbd', steelLight: '#ffffff',
     line: '#141833',
   };

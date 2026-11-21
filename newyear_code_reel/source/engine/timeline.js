@@ -16,9 +16,29 @@
     return steps;
   }
 
-  /* registry: 이름 → { check(args, kwargs, env) 던지면 오류, apply(...) 변수 갱신, make(...) 객체 만들기, log(...) 한 줄 설명 }
-       이름 꼴: 'snow.fall'(호출) · 'year ='/'year +='(대입) · '= 삽질러'(생성해서 대입) · '삽질러.dig'(변수에 담긴 객체의 메서드)
+  /* registry: 이름 → { fn(env, ...값) 실제로 하는 일(던지면 오류, 돌려준 값은 대입), args 값 검사, log(값, env) 한 줄 설명 }
+       이름 꼴: 'snow.fall'(호출) · 'year ='/'year +='(대입) · '= 삽질러'(생성해서 대입) · '삽질러.삽질'(변수에 담긴 객체의 메서드)
      timing: { start, cps, enterDelay, gap, duration, lines: [{before, cps, hold, fireAt, fireAfter}] } */
+  const err = (type, msg) => { const e = new Error(msg); e.pyType = type; return e; };
+  // 값 검사: [이름, 최소, 최대, 넘었을 때 말] 또는 [이름, 'string']
+  function checkArgs(specs, args) {
+    specs.forEach((sp, i) => {
+      const v = args[i];
+      if (sp[1] === 'string') { if (typeof v !== 'string' || !v) throw err('TypeError', `${sp[0]}을(를) 따옴표로 적어 주세요`); return; }
+      if (typeof v !== 'number' || !isFinite(v)) throw err('TypeError', `${sp[0]}에는 숫자가 필요합니다`);
+      if (v < sp[1] || v > sp[2]) throw err('RangeError', sp[3] || `${sp[0]}은(는) ${sp[1]}~${sp[2]}`);
+    });
+    if (args.length > specs.length) throw err('TypeError', `값은 ${specs.length}개까지`);
+  }
+  // 줄을 실행한 직후의 상태(무대는 이것을 보고 그린다)
+  function snapshot(env) {
+    return {
+      year: env.year, year0: env.year0, thanked: !!env.thanked, snow: env.snow,
+      days: env.days ? env.days.length : 0,
+      beats: env.beats ? env.beats.slice() : null, shells: env.shells ? env.shells.slice() : null,
+    };
+  }
+
   function build(scriptText, timing, registry) {
     const rawLines = scriptText.replace(/\r/g, '').split('\n');
     while (rawLines.length && rawLines[rawLines.length - 1].trim() === '') rawLines.pop();
@@ -28,7 +48,6 @@
 
     function resolve(parsed) {
       // 돌려주는 것: {key, args, kwargs, target} — 없으면 오류를 던진다
-      const err = (type, msg) => { const e = new Error(msg); e.pyType = type; return e; };
       if (parsed.kind === 'call') {
         if (registry[parsed.name]) return { key: parsed.name, args: parsed.args, kwargs: parsed.kwargs };
         const parts = parsed.name.split('.');
@@ -106,15 +125,17 @@
           if (r.plain) { env[r.target] = r.args[0]; f.silent = true; }
           else {
             const entry = registry[r.key];
-            if (entry.check) entry.check(r.args, r.kwargs, env);
-            if (entry.make) env[r.target] = entry.make(r.args, r.kwargs, env);
-            if (entry.apply) entry.apply(r.args, r.kwargs, env);
+            checkArgs(entry.args || [], r.args);
+            if (parsed.kind === 'assign' && parsed.op !== '=' && env[r.target] == null) throw err('NameError', `name '${r.target}' is not defined`);
+            const ret = entry.fn(env, ...r.args);            // ← 실제로 하는 일(newyear.js)
+            if (r.key.startsWith('= ')) env[r.target] = ret;
             f.key = r.key;
-            f.log = entry.log ? entry.log(r.args, r.kwargs, env) : null;
+            f.log = entry.log ? entry.log(r.args, env) : null;
           }
         } catch (e) {
-          f.ok = false; f.error = { type: e.pyType || 'Error', message: e.message };
+          f.ok = false; f.error = { type: e.pyType || e.name || 'Error', message: e.message };
         }
+        f.env = snapshot(env);
       }
       if (!f.ok) errorRows.push({ afterLine: idx, t: f.t, text: `${f.error.type}: ${f.error.message}` });
       keys.push({ t: clock, kind: 'enter', line: idx, ok: f.ok });
